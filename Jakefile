@@ -8,6 +8,7 @@ var child_process = require("child_process");
 // Variables
 var compilerDirectory = "src/compiler/";
 var servicesDirectory = "src/services/";
+var generatorDirectory = "src/generator/";
 var harnessDirectory = "src/harness/";
 var libraryDirectory = "src/lib/";
 var scriptsDirectory = "scripts/";
@@ -90,6 +91,7 @@ var servicesSources = [
     return path.join(servicesDirectory, f);
 }));
 
+
 var definitionsRoots = [
     "compiler/types.d.ts",
     "compiler/scanner.d.ts",
@@ -106,6 +108,24 @@ var internalDefinitionsRoots = [
     "compiler/commandLineParser.d.ts",
     "services/utilities.d.ts",
 ];
+
+var generatorSources = [
+    "core.ts",
+    "sys.ts",
+    "types.ts",
+    "scanner.ts",
+    "parser.ts",
+    "binder.ts",
+    "checker.ts",
+    "emitter.ts"
+].map(function (f) {
+    return path.join(compilerDirectory, f);
+}).concat([
+    "generator.ts"
+].map(function (f) {
+    return path.join(generatorDirectory, f);
+}));
+
 
 var harnessSources = [
     "harness.ts",
@@ -194,6 +214,7 @@ var compilerFilename = "tsc.js";
     * @param keepComments: false to compile using --removeComments
     * @param callback: a function to execute after the compilation process ends
     */
+
 function compileFile(outFile, sources, prereqs, prefixes, useBuiltCompiler, noOutFile, generateDeclarations, outDir, preserveConstEnums, keepComments, noResolve, callback) {
     file(outFile, prereqs, function() {
         var dir = useBuiltCompiler ? builtLocalDirectory : LKGDirectory;
@@ -372,9 +393,12 @@ compileFile(nodeDefinitionsFile, servicesSources,[builtLocalDirectory, copyright
                 jake.rmRf(tempDirPath, {silent: true});
            });
 
+var generatorFile = path.join(builtLocalDirectory, "typescriptGenerator.js");
+compileFile(generatorFile, generatorSources, [builtLocalDirectory, copyright].concat(generatorSources), [copyright], /*useBuiltCompiler:*/ true, /*noOutFile:*/ false, /*moduleType:*/ null);
+
 // Local target to build the compiler and services
 desc("Builds the full compiler and services");
-task("local", ["generate-diagnostics", "lib", tscFile, servicesFile, nodeDefinitionsFile]);
+task("local", ["generate-diagnostics", "lib", tscFile, servicesFile, generatorFile, nodeDefinitionsFile]);
 
 // Local target to build the compiler and services
 desc("Sets release mode flag");
