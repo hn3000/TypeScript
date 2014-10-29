@@ -24,7 +24,7 @@ module ts {
                 }
                 text = "";
             }
-            return text !== undefined ? createSourceFile(filename, text, languageVersion) : undefined;
+            return text !== undefined ? createSourceFile(filename, text, languageVersion, /*version:*/ "0") : undefined;
         }
 
         function writeFile(fileName: string, data: string, writeByteOrderMark:boolean, onError?: (message: string) => void) {
@@ -57,6 +57,12 @@ module ts {
                 if (onError) onError(e.message);
             }
             */
+        }
+
+        function getCanonicalFileName(fileName: string): string {
+            // if underlying system can distinguish between two files whose names differs only in cases then file name already in canonical form.
+            // otherwise use toLowerCase as a canonical form.
+            return sys.useCaseSensitiveFileNames ? fileName : fileName.toLowerCase();
         }
 
         return {
@@ -104,7 +110,7 @@ module ts {
             host = createCompilerHost(options),
             program = createProgram(filenames, options, host),
             errors = program.getDiagnostics(),
-            checker = program.getTypeChecker(),
+            checker = program.getTypeChecker(/*fullTypeCheckMode*/ true),
             typeErrors = checker.getDiagnostics(),
             emitErrors = checker.emitFiles().errors,
             sourceFiles = program.getSourceFiles(),
@@ -132,8 +138,8 @@ module ts {
                     sourcefile: thisOne,
                     checker: checker
                 };
-                var contextWalker = walker.bind(null, context);
-                forEachChild(thisOne, contextWalker);
+
+                walker(context, thisOne);
             }
         }
     }
