@@ -90,7 +90,7 @@ function parameterList(parameters, context) {
   return params.join(',');
 }
 
-var texasranger = function(context, n, after) {
+var structureDumper = function(context, n, after) {
   var descend = false;
   if (n.kind == ts.SyntaxKind.ClassDeclaration) {
     descend = true;
@@ -155,10 +155,24 @@ var texasranger = function(context, n, after) {
   return descend;
 };
 
+
+var importDumper = function(context, n, after) {
+  if (n.kind == ts.SyntaxKind.SourceFile) {
+    console.log(n.filename);
+    var files = n.referencedFiles;
+    for (var i = 0, n = files.length; i < n; ++i) {
+      console.log('- '+files[i].filename);
+    }
+  }
+  return false;
+};
+
+
 var files = ['Geometry.ts'];
 
 if (process.argv.length > 2) {
   files = process.argv.slice(2);
 }
 
-ts.walkProgram(files, texasranger);
+//ts.walkProgram(files, structureDumper);
+ts.walkProgram(files, importDumper);
