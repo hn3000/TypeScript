@@ -2,7 +2,6 @@
 /// IE DOM APIs
 /////////////////////////////
 
-
 interface PositionOptions {
     enableHighAccuracy?: boolean;
     timeout?: number;
@@ -7352,7 +7351,7 @@ declare var Event: {
 
 interface ImageData {
     width: number;
-    data: number[];
+    data: Uint8ClampedArray;
     height: number;
 }
 declare var ImageData: {

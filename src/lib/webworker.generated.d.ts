@@ -2,7 +2,6 @@
 /// IE Worker APIs
 /////////////////////////////
 
-
 interface Console {
     info(message?: any, ...optionalParams: any[]): void;
     warn(message?: any, ...optionalParams: any[]): void;
@@ -165,7 +164,7 @@ declare var Event: {
 
 interface ImageData {
     width: number;
-    data: number[];
+    data: Uint8ClampedArray;
     height: number;
 }
 declare var ImageData: {
