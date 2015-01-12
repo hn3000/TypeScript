@@ -121,7 +121,8 @@ var generatorSources = [
 ].map(function (f) {
     return path.join(compilerDirectory, f);
 }).concat([
-    "generator.ts"
+    "generator.ts",
+    "generatorAPI.ts"
 ].map(function (f) {
     return path.join(generatorDirectory, f);
 }));
@@ -394,7 +395,11 @@ compileFile(nodeDefinitionsFile, servicesSources,[builtLocalDirectory, copyright
            });
 
 var generatorFile = path.join(builtLocalDirectory, "typescriptGenerator.js");
-compileFile(generatorFile, generatorSources, [builtLocalDirectory, copyright].concat(generatorSources), [copyright], /*useBuiltCompiler:*/ true, /*noOutFile:*/ false, /*moduleType:*/ null);
+compileFile(generatorFile, generatorSources,[builtLocalDirectory, copyright].concat(generatorSources),
+            /*prefixes*/ [copyright],
+            /*useBuiltCompiler*/ true,
+            /*noOutFile*/ false,
+            /*generateDeclarations*/ true);
 
 // Local target to build the compiler and services
 desc("Builds the full compiler and services");
