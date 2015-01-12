@@ -317,13 +317,13 @@ interface String {
       * Matches a string with a regular expression, and returns an array containing the results of that search.
       * @param regexp A variable name or string literal containing the regular expression pattern and flags.
       */
-    match(regexp: string): string[];
+    match(regexp: string): RegExpMatchArray;
 
     /** 
       * Matches a string with a regular expression, and returns an array containing the results of that search.
       * @param regexp A regular expression object that contains the regular expression pattern and applicable flags. 
       */
-    match(regexp: RegExp): string[];
+    match(regexp: RegExp): RegExpMatchArray;
 
     /**
       * Replaces text in a string, using a regular expression or search string.
@@ -497,6 +497,10 @@ declare var Number: {
       * JavaScript displays POSITIVE_INFINITY values as infinity. 
       */
     POSITIVE_INFINITY: number;
+}
+
+interface TemplateStringsArray extends Array<string> {
+    raw: string[];
 }
 
 interface Math {
@@ -790,38 +794,15 @@ declare var Date: {
     now(): number;
 }
 
-interface RegExpExecArray {
-    [index: number]: string;
-    length: number;
-
-    index: number;
-    input: string;
-
-    toString(): string;
-    toLocaleString(): string;
-    concat(...items: string[][]): string[];
-    join(separator?: string): string;
-    pop(): string;
-    push(...items: string[]): number;
-    reverse(): string[];
-    shift(): string;
-    slice(start?: number, end?: number): string[];
-    sort(compareFn?: (a: string, b: string) => number): string[];
-    splice(start: number): string[];
-    splice(start: number, deleteCount: number, ...items: string[]): string[];
-    unshift(...items: string[]): number;
-
-    indexOf(searchElement: string, fromIndex?: number): number;
-    lastIndexOf(searchElement: string, fromIndex?: number): number;
-    every(callbackfn: (value: string, index: number, array: string[]) => boolean, thisArg?: any): boolean;
-    some(callbackfn: (value: string, index: number, array: string[]) => boolean, thisArg?: any): boolean;
-    forEach(callbackfn: (value: string, index: number, array: string[]) => void, thisArg?: any): void;
-    map(callbackfn: (value: string, index: number, array: string[]) => any, thisArg?: any): any[];
-    filter(callbackfn: (value: string, index: number, array: string[]) => boolean, thisArg?: any): string[];
-    reduce(callbackfn: (previousValue: any, currentValue: any, currentIndex: number, array: string[]) => any, initialValue?: any): any;
-    reduceRight(callbackfn: (previousValue: any, currentValue: any, currentIndex: number, array: string[]) => any, initialValue?: any): any;
+interface RegExpMatchArray extends Array<string> {
+    index?: number;
+    input?: string;
 }
 
+interface RegExpExecArray extends Array<string> {
+    index: number;
+    input: string;
+}
 
 interface RegExp {
     /** 
@@ -980,10 +961,23 @@ declare var JSON: JSON;
 
 interface Array<T> {
     /**
+      * Gets or sets the length of the array. This is a number one higher than the highest element defined in an array.
+      */
+    length: number;
+    /**
       * Returns a string representation of an array.
       */
     toString(): string;
     toLocaleString(): string;
+    /**
+      * Appends new elements to an array, and returns the new length of the array.
+      * @param items New elements of the Array.
+      */
+    push(...items: T[]): number;
+    /**
+      * Removes the last element from an array and returns it.
+      */
+    pop(): T;
     /**
       * Combines two or more arrays.
       * @param items Additional items to add to the end of array1.
@@ -999,15 +993,6 @@ interface Array<T> {
       * @param separator A string used to separate one element of an array from the next in the resulting String. If omitted, the array elements are separated with a comma.
       */
     join(separator?: string): string;
-    /**
-      * Removes the last element from an array and returns it.
-      */
-    pop(): T;
-    /**
-      * Appends new elements to an array, and returns the new length of the array.
-      * @param items New elements of the Array.
-      */
-    push(...items: T[]): number;
     /**
       * Reverses the elements in an Array. 
       */
@@ -1124,11 +1109,6 @@ interface Array<T> {
       */
     reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
-    /**
-      * Gets or sets the length of the array. This is a number one higher than the highest element defined in an array.
-      */
-    length: number;
-
     [n: number]: T;
 }
 declare var Array: {
@@ -1206,14 +1186,14 @@ interface Int8Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Int8Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1264,14 +1244,14 @@ interface Uint8Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Uint8Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1289,6 +1269,64 @@ declare var Uint8Array: {
     new (array: Uint8Array): Uint8Array;
     new (array: number[]): Uint8Array;
     new (buffer: ArrayBuffer, byteOffset?: number, length?: number): Uint8Array;
+    BYTES_PER_ELEMENT: number;
+}
+
+/**
+  * A typed array of 8-bit unsigned integer values. The contents are initialized to 0. If the requested number of bytes could not be allocated an exception is raised.
+  */
+interface Uint8ClampedArray extends ArrayBufferView {
+    /**
+      * The size in bytes of each element in the array. 
+      */
+    BYTES_PER_ELEMENT: number;
+
+    /**
+      * The length of the array.
+      */
+    length: number;
+    [index: number]: number;
+
+    /**
+      * Gets the element at the specified index.
+      * @param index The index at which to get the element of the array.
+      */
+    get(index: number): number;
+
+    /**
+      * Sets a value or an array of values.
+      * @param index The index of the location to set.
+      * @param value The value to set.
+      */
+    set(index: number, value: number): void;
+
+    /**
+      * Sets a value or an array of values.
+      * @param array A typed or untyped array of values to set.
+      * @param offset The index in the current array at which the values are to be written.
+      */
+    set(array: Uint8Array, offset?: number): void;
+
+    /**
+      * Sets a value or an array of values.
+      * @param array A typed or untyped array of values to set.
+      * @param offset The index in the current array at which the values are to be written.
+      */
+    set(array: number[], offset?: number): void;
+
+    /**
+      * Gets a new Uint8Array view of the ArrayBuffer Object store for this array, specifying the first and last members of the subarray. 
+      * @param begin The index of the beginning of the array.
+      * @param end The index of the end of the array.
+      */
+    subarray(begin: number, end?: number): Uint8Array;
+}
+declare var Uint8ClampedArray: {
+    prototype: Uint8ClampedArray;
+    new (length: number): Uint8ClampedArray;
+    new (array: Uint8ClampedArray): Uint8ClampedArray;
+    new (array: number[]): Uint8ClampedArray;
+    new (buffer: ArrayBuffer, byteOffset?: number, length?: number): Uint8ClampedArray;
     BYTES_PER_ELEMENT: number;
 }
 
@@ -1322,14 +1360,14 @@ interface Int16Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Int16Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1380,14 +1418,14 @@ interface Uint16Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Uint16Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1438,14 +1476,14 @@ interface Int32Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Int32Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1496,14 +1534,14 @@ interface Uint32Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Uint32Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1554,14 +1592,14 @@ interface Float32Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Float32Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1612,14 +1650,14 @@ interface Float64Array extends ArrayBufferView {
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: Float64Array, offset?: number): void;
 
     /**
       * Sets a value or an array of values.
-      * @param A typed or untyped array of values to set.
+      * @param array A typed or untyped array of values to set.
       * @param offset The index in the current array at which the values are to be written.
       */
     set(array: number[], offset?: number): void;
@@ -1967,7 +2005,6 @@ interface Date {
 /////////////////////////////
 /// IE DOM APIs
 /////////////////////////////
-
 
 interface PositionOptions {
     enableHighAccuracy?: boolean;
@@ -3831,30 +3868,42 @@ declare var Window: {
     new(): Window;
 }
 
-interface FormData {
-    append(name: any, value: any, blobName?: string): void;
+interface HTMLCollection extends MSHTMLCollectionExtensions {
+    /**
+      * Sets or retrieves the number of objects in a collection.
+      */
+    length: number;
+    /**
+      * Retrieves an object from various collections.
+      */
+    item(nameOrIndex?: any, optionalIndex?: any): Element;
+    /**
+      * Retrieves a select object or an object from an options collection.
+      */
+    namedItem(name: string): Element;
+    // [name: string]: Element;
+    [index: number]: Element;
 }
-declare var FormData: {
-    prototype: FormData;
-    new (form?: HTMLFormElement): FormData;
+declare var HTMLCollection: {
+    prototype: HTMLCollection;
+    new(): HTMLCollection;
 }
 
-interface SourceBuffer extends EventTarget {
-    updating: boolean;
-    appendWindowStart: number;
-    appendWindowEnd: number;
-    buffered: TimeRanges;
-    timestampOffset: number;
-    audioTracks: AudioTrackList;
-    appendBuffer(data: ArrayBufferView): void;
-    appendBuffer(data: ArrayBuffer): void;
-    remove(start: number, end: number): void;
-    abort(): void;
-    appendStream(stream: MSStream, maxSize?: number): void;
+interface BlobPropertyBag {
+    type?: string;
+    endings?: string;
 }
-declare var SourceBuffer: {
-    prototype: SourceBuffer;
-    new(): SourceBuffer;
+
+interface Blob {
+    type: string;
+    size: number;
+    msDetachStream(): any;
+    slice(start?: number, end?: number, contentType?: string): Blob;
+    msClose(): void;
+}
+declare var Blob: {
+    prototype: Blob;
+    new (blobParts?: any[], options?: BlobPropertyBag): Blob;
 }
 
 interface NavigatorID {
@@ -5761,26 +5810,6 @@ interface MSCSSProperties extends CSSStyleDeclaration {
 declare var MSCSSProperties: {
     prototype: MSCSSProperties;
     new(): MSCSSProperties;
-}
-
-interface HTMLCollection extends MSHTMLCollectionExtensions {
-    /**
-      * Sets or retrieves the number of objects in a collection.
-      */
-    length: number;
-    /**
-      * Retrieves an object from various collections.
-      */
-    item(nameOrIndex?: any, optionalIndex?: any): Element;
-    /**
-      * Retrieves a select object or an object from an options collection.
-      */
-    namedItem(name: string): Element;
-    // [name: string]: Element;
-}
-declare var HTMLCollection: {
-    prototype: HTMLCollection;
-    new(): HTMLCollection;
 }
 
 interface SVGExternalResourcesRequired {
@@ -9326,7 +9355,7 @@ declare var Event: {
 
 interface ImageData {
     width: number;
-    data: number[];
+    data: Uint8ClampedArray;
     height: number;
 }
 declare var ImageData: {
@@ -12018,18 +12047,6 @@ declare var FileReader: {
     new(): FileReader;
 }
 
-interface Blob {
-    type: string;
-    size: number;
-    msDetachStream(): any;
-    slice(start?: number, end?: number, contentType?: string): Blob;
-    msClose(): void;
-}
-declare var Blob: {
-    prototype: Blob;
-    new(): Blob;
-}
-
 interface ApplicationCache extends EventTarget {
     status: number;
     ondownloading: (ev: Event) => any;
@@ -12186,6 +12203,14 @@ declare var MSManipulationEvent: {
     MS_MANIPULATION_STATE_PRESELECT: number;
     MS_MANIPULATION_STATE_DRAGGING: number;
     MS_MANIPULATION_STATE_CANCELLED: number;
+}
+
+interface FormData {
+    append(name: any, value: any, blobName?: string): void;
+}
+declare var FormData: {
+    prototype: FormData;
+    new(): FormData;
 }
 
 interface HTMLDataListElement extends HTMLElement {
@@ -12604,6 +12629,23 @@ declare var NavigationEvent: {
 
 interface RandomSource {
     getRandomValues(array: ArrayBufferView): ArrayBufferView;
+}
+
+interface SourceBuffer extends EventTarget {
+    updating: boolean;
+    appendWindowStart: number;
+    appendWindowEnd: number;
+    buffered: TimeRanges;
+    timestampOffset: number;
+    audioTracks: AudioTrackList;
+    appendBuffer(data: ArrayBuffer): void;
+    remove(start: number, end: number): void;
+    abort(): void;
+    appendStream(stream: MSStream, maxSize?: number): void;
+}
+declare var SourceBuffer: {
+    prototype: SourceBuffer;
+    new(): SourceBuffer;
 }
 
 interface MSInputMethodContext extends EventTarget {
