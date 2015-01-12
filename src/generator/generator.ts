@@ -7,7 +7,6 @@
 
 /// <reference path="../compiler/sys.ts"/>
 
-
 module ts {
 
     function createCompilerHost(options: CompilerOptions): CompilerHost {
@@ -77,7 +76,7 @@ module ts {
     }
 
     export function getDefaultCompilerOptions(): CompilerOptions {
-        // Set "ES5" target by default for language service
+        // Set "ES5" target by default for this service
         return {
             target: ScriptTarget.ES5,
             module: ModuleKind.None
