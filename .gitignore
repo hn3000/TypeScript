@@ -43,3 +43,6 @@ scripts/word2md.js
 scripts/ior.js
 scripts/*.js.map
 coverage/
+
+src/**/*js
+src/**/*js.map
