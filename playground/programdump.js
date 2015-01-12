@@ -4,27 +4,43 @@ var ts = require('../built/local/typescriptGenerator.js');
 var modules = [];
 var classes = [];
 
+function typeToString(type) {
+  var typeString = null;
+  
+  if (type && type.callSignatures && type.callSignatures.length && type.callSignatures[0].resolvedReturnType) {
+    type = type.callSignatures[0].resolvedReturnType;
+  }
+  
+  if (type) {
+    if (type.intrinsicName) {
+      typeString = type.intrinsicName;
+    } else if (type.symbol && type.symbol.name) {
+      typeString = type.symbol.name;
+    } else if (type.symbol && type.symbol.getName) {
+      typeString = type.symbol.getName();
+    } else {
+      typeString = '**'+type.flags+'*'+JSON.stringify(type);
+    }
+  }
+  
+  return typeString;
+}
+
+
 function typename(node, context) {
   var typeNode = node.type;
 
   var typeString = null;
 
   if (node.symbol) {
-    var type = context.checker.getTypeOfSymbol(node.symbol);
-
-    if (type && type.callSignatures && type.callSignatures.length && type.callSignatures[0].resolvedReturnType) {
-      type = type.callSignatures[0].resolvedReturnType;
-    }
-
-    if (type) {
-      if (type.intrinsicName) {
-        typeString = type.intrinsicName;
-      } else if (type.symbol && type.symbol.name) {
-        typeString = type.symbol.name;
-      } else if (type.symbol && type.symbol.getName) {
-        typeString = type.symbol.getName();
+    var decltype = context.checker.getDeclaredTypeOfSymbol(node.symbol);
+    var narrowtype = context.checker.getNarrowedTypeOfSymbol(node.symbol);
+    typeString = typeToString(decltype);
+    if (narrowtype && narrowtype != decltype) {
+      if (typeString) {
+	typeString += '('+typeToString(narrowtype)+')';
       } else {
-        typeString = '**'+type.flags+'*'+JSON.stringify(type);
+	typeString = typeToString(narrowtype);
       }
     }
   }
@@ -114,7 +130,6 @@ var structureDumper = function(context, n, after) {
     if (!after) {
       modules.push(n.name.text);
       console.log("module "+ modules[modules.length-1] + '   ('+context.sourcefile.filename+')');
-
       descend = true;
     } else {
       console.log("/module "+ modules[modules.length-1]);
@@ -148,24 +163,16 @@ var structureDumper = function(context, n, after) {
     }
   } else if (n.kind == ts.SyntaxKind.Identifier) {
     descend = false;
+  } else if (n.kind == ts.SyntaxKind.SourceFile) {
+      console.log('    ->'+ ts.SyntaxKind[n.kind], n.filename);
+      descend = true;
   } else {
-    console.log('    #'+ ts.SyntaxKind[n.kind]);
+      console.log('    #'+ ts.SyntaxKind[n.kind]);
   }
 
   return descend;
 };
 
-
-var importDumper = function(context, n, after) {
-  if (n.kind == ts.SyntaxKind.SourceFile) {
-    console.log(n.filename);
-    var files = n.referencedFiles;
-    for (var i = 0, n = files.length; i < n; ++i) {
-      console.log('- '+files[i].filename);
-    }
-  }
-  return false;
-};
 
 
 var files = ['Geometry.ts'];
@@ -174,5 +181,5 @@ if (process.argv.length > 2) {
   files = process.argv.slice(2);
 }
 
-//ts.walkProgram(files, structureDumper);
-ts.walkProgram(files, importDumper);
+ts.walkProgram(files, structureDumper);
+
