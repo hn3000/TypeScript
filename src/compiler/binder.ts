@@ -1,6 +1,8 @@
 /// <reference path="parser.ts"/>
 
 module ts {
+    /* @internal */ export var bindTime = 0;
+
     export const enum ModuleInstanceState {
         NonInstantiated = 0,
         Instantiated    = 1,
@@ -9,16 +11,16 @@ module ts {
 
     export function getModuleInstanceState(node: Node): ModuleInstanceState {
         // A module is uninstantiated if it contains only 
-        // 1. interface declarations
-        if (node.kind === SyntaxKind.InterfaceDeclaration) {
+        // 1. interface declarations, type alias declarations
+        if (node.kind === SyntaxKind.InterfaceDeclaration || node.kind === SyntaxKind.TypeAliasDeclaration) {
             return ModuleInstanceState.NonInstantiated;
         }
-        // 2. const enum declarations don't make module instantiated
+        // 2. const enum declarations
         else if (isConstEnumDeclaration(node)) {
             return ModuleInstanceState.ConstEnumOnly;
         }
-        // 3. non - exported import declarations
-        else if (node.kind === SyntaxKind.ImportDeclaration && !(node.flags & NodeFlags.Export)) {
+        // 3. non-exported import declarations
+        else if ((node.kind === SyntaxKind.ImportDeclaration || node.kind === SyntaxKind.ImportEqualsDeclaration) && !(node.flags & NodeFlags.Export)) {
             return ModuleInstanceState.NonInstantiated;
         }
         // 4. other uninstantiated module declarations.
@@ -49,18 +51,13 @@ module ts {
         }
     }
 
-    /**
-     * Returns false if any of the following are true:
-     *   1. declaration has no name
-     *   2. declaration has a literal name (not computed)
-     *   3. declaration has a computed property name that is a known symbol
-     */
-    export function hasComputedNameButNotSymbol(declaration: Declaration): boolean {
-        return declaration.name && declaration.name.kind === SyntaxKind.ComputedPropertyName;
+    export function bindSourceFile(file: SourceFile): void {
+        var start = new Date().getTime();
+        bindSourceFileWorker(file);
+        bindTime += new Date().getTime() - start;
     }
 
-    export function bindSourceFile(file: SourceFile) {
-
+    function bindSourceFileWorker(file: SourceFile): void {
         var parent: Node;
         var container: Node;
         var blockScopeContainer: Node;
@@ -70,7 +67,8 @@ module ts {
 
         if (!file.locals) {
             file.locals = {};
-            container = blockScopeContainer = file;
+            container = file;
+            setBlockScopeContainer(file, /*cleanLocals*/ false);
             bind(file);
             file.symbolCount = symbolCount;
         }
@@ -78,6 +76,13 @@ module ts {
         function createSymbol(flags: SymbolFlags, name: string): Symbol {
             symbolCount++;
             return new Symbol(flags, name);
+        }
+
+        function setBlockScopeContainer(node: Node, cleanLocals: boolean) {
+            blockScopeContainer = node;
+            if (cleanLocals) {
+                blockScopeContainer.locals = undefined;
+            }
         }
 
         function addDeclarationToSymbol(symbol: Symbol, node: Declaration, symbolKind: SymbolFlags) {
@@ -90,13 +95,18 @@ module ts {
             if (symbolKind & SymbolFlags.Value && !symbol.valueDeclaration) symbol.valueDeclaration = node;
         }
 
-        // Should not be called on a declaration with a computed property name.
+        // Should not be called on a declaration with a computed property name,
+        // unless it is a well known Symbol.
         function getDeclarationName(node: Declaration): string {
             if (node.name) {
                 if (node.kind === SyntaxKind.ModuleDeclaration && node.name.kind === SyntaxKind.StringLiteral) {
                     return '"' + (<LiteralExpression>node.name).text + '"';
                 }
-                Debug.assert(!hasComputedNameButNotSymbol(node));
+                if (node.name.kind === SyntaxKind.ComputedPropertyName) {
+                    var nameExpression = (<ComputedPropertyName>node.name).expression;
+                    Debug.assert(isWellKnownSymbolSyntactically(nameExpression));
+                    return getPropertyNameForKnownSymbolName((<PropertyAccessExpression>nameExpression).name.text);
+                }
                 return (<Identifier | LiteralExpression>node.name).text;
             }
             switch (node.kind) {
@@ -110,6 +120,13 @@ module ts {
                     return "__new";
                 case SyntaxKind.IndexSignature:
                     return "__index";
+                case SyntaxKind.ExportDeclaration:
+                    return "__export";
+                case SyntaxKind.ExportAssignment:
+                    return "default";
+                case SyntaxKind.FunctionDeclaration:
+                case SyntaxKind.ClassDeclaration:
+                    return node.flags & NodeFlags.Default ? "default" : undefined;
             }
         }
 
@@ -118,13 +135,11 @@ module ts {
         }
 
         function declareSymbol(symbols: SymbolTable, parent: Symbol, node: Declaration, includes: SymbolFlags, excludes: SymbolFlags): Symbol {
-            // Nodes with computed property names will not get symbols, because the type checker
-            // does not make properties for them.
-            if (hasComputedNameButNotSymbol(node)) {
-                return undefined;
-            }
+            Debug.assert(!hasDynamicName(node));
 
-            var name = getDeclarationName(node);
+            // The exported symbol for an export default function/class node is always named "default"
+            var name = node.flags & NodeFlags.Default && parent ? "default" : getDeclarationName(node);
+
             if (name !== undefined) {
                 var symbol = hasProperty(symbols, name) ? symbols[name] : (symbols[name] = createSymbol(0, name));
                 if (symbol.flags & excludes) {
@@ -139,9 +154,9 @@ module ts {
                         : Diagnostics.Duplicate_identifier_0;
 
                     forEach(symbol.declarations, declaration => {
-                        file.semanticDiagnostics.push(createDiagnosticForNode(declaration.name, message, getDisplayName(declaration)));
+                        file.bindDiagnostics.push(createDiagnosticForNode(declaration.name || declaration, message, getDisplayName(declaration)));
                     });
-                    file.semanticDiagnostics.push(createDiagnosticForNode(node.name, message, getDisplayName(node)));
+                    file.bindDiagnostics.push(createDiagnosticForNode(node.name || node, message, getDisplayName(node)));
 
                     symbol = createSymbol(0, name);
                 }
@@ -162,7 +177,7 @@ module ts {
                     if (node.name) {
                         node.name.parent = node;
                     }
-                    file.semanticDiagnostics.push(createDiagnosticForNode(symbol.exports[prototypeSymbol.name].declarations[0],
+                    file.bindDiagnostics.push(createDiagnosticForNode(symbol.exports[prototypeSymbol.name].declarations[0],
                         Diagnostics.Duplicate_identifier_0, prototypeSymbol.name));
                 }
                 symbol.exports[prototypeSymbol.name] = prototypeSymbol;
@@ -181,40 +196,38 @@ module ts {
         }
 
         function declareModuleMember(node: Declaration, symbolKind: SymbolFlags, symbolExcludes: SymbolFlags) {
-            // Exported module members are given 2 symbols: A local symbol that is classified with an ExportValue,
-            // ExportType, or ExportContainer flag, and an associated export symbol with all the correct flags set
-            // on it. There are 2 main reasons:
-            //
-            //   1. We treat locals and exports of the same name as mutually exclusive within a container. 
-            //      That means the binder will issue a Duplicate Identifier error if you mix locals and exports
-            //      with the same name in the same container.
-            //      TODO: Make this a more specific error and decouple it from the exclusion logic.
-            //   2. When we checkIdentifier in the checker, we set its resolved symbol to the local symbol,
-            //      but return the export symbol (by calling getExportSymbolOfValueSymbolIfExported). That way
-            //      when the emitter comes back to it, it knows not to qualify the name if it was found in a containing scope.
-            var exportKind = 0;
-            if (symbolKind & SymbolFlags.Value) {
-                exportKind |= SymbolFlags.ExportValue;
+            var hasExportModifier = getCombinedNodeFlags(node) & NodeFlags.Export;
+            if (symbolKind & SymbolFlags.Alias) {
+                if (node.kind === SyntaxKind.ExportSpecifier || (node.kind === SyntaxKind.ImportEqualsDeclaration && hasExportModifier)) {
+                    declareSymbol(container.symbol.exports, container.symbol, node, symbolKind, symbolExcludes);
+                }
+                else {
+                    declareSymbol(container.locals, undefined, node, symbolKind, symbolExcludes);
+                }
             }
-            if (symbolKind & SymbolFlags.Type) {
-                exportKind |= SymbolFlags.ExportType;
-            }
-            if (symbolKind & SymbolFlags.Namespace) {
-                exportKind |= SymbolFlags.ExportNamespace;
-            }
-
-            if (getCombinedNodeFlags(node) & NodeFlags.Export || (node.kind !== SyntaxKind.ImportDeclaration && isAmbientContext(container))) {
-                if (exportKind) {
+            else {
+                // Exported module members are given 2 symbols: A local symbol that is classified with an ExportValue,
+                // ExportType, or ExportContainer flag, and an associated export symbol with all the correct flags set
+                // on it. There are 2 main reasons:
+                //
+                //   1. We treat locals and exports of the same name as mutually exclusive within a container. 
+                //      That means the binder will issue a Duplicate Identifier error if you mix locals and exports
+                //      with the same name in the same container.
+                //      TODO: Make this a more specific error and decouple it from the exclusion logic.
+                //   2. When we checkIdentifier in the checker, we set its resolved symbol to the local symbol,
+                //      but return the export symbol (by calling getExportSymbolOfValueSymbolIfExported). That way
+                //      when the emitter comes back to it, it knows not to qualify the name if it was found in a containing scope.
+                if (hasExportModifier || isAmbientContext(container)) {
+                    var exportKind = (symbolKind & SymbolFlags.Value ? SymbolFlags.ExportValue : 0) |
+                        (symbolKind & SymbolFlags.Type ? SymbolFlags.ExportType : 0) |
+                        (symbolKind & SymbolFlags.Namespace ? SymbolFlags.ExportNamespace : 0);
                     var local = declareSymbol(container.locals, undefined, node, exportKind, symbolExcludes);
                     local.exportSymbol = declareSymbol(container.symbol.exports, container.symbol, node, symbolKind, symbolExcludes);
                     node.localSymbol = local;
                 }
                 else {
-                    declareSymbol(container.symbol.exports, container.symbol, node, symbolKind, symbolExcludes);
+                    declareSymbol(container.locals, undefined, node, symbolKind, symbolExcludes);
                 }
-            }
-            else {
-                declareSymbol(container.locals, undefined, node, symbolKind, symbolExcludes);
             }
         }
 
@@ -240,7 +253,13 @@ module ts {
             }
 
             if (isBlockScopeContainer) {
-                blockScopeContainer = node;
+                // in incremental scenarios we might reuse nodes that already have locals being allocated
+                // during the bind step these locals should be dropped to prevent using stale data.
+                // locals should always be dropped unless they were previously initialized by the binder
+                // these cases are:
+                // - node has locals (symbolKind & HasLocals) !== 0
+                // - node is a source file
+                setBlockScopeContainer(node, /*cleanLocals*/  (symbolKind & SymbolFlags.HasLocals) === 0 && node.kind !== SyntaxKind.SourceFile);
             }
 
             forEachChild(node, bind);
@@ -339,14 +358,7 @@ module ts {
         }
 
         function bindCatchVariableDeclaration(node: CatchClause) {
-            var symbol = createSymbol(SymbolFlags.FunctionScopedVariable, node.name.text || "__missing");
-            addDeclarationToSymbol(symbol, node, SymbolFlags.FunctionScopedVariable);
-            var saveParent = parent;
-            var savedBlockScopeContainer = blockScopeContainer;
-            parent = blockScopeContainer = node;
-            forEachChild(node, bind);
-            parent = saveParent;
-            blockScopeContainer = savedBlockScopeContainer;
+            bindChildren(node, /*symbolKind:*/ 0, /*isBlockScopeContainer:*/ true);
         }
 
         function bindBlockScopedVariableDeclaration(node: Declaration) {
@@ -374,6 +386,7 @@ module ts {
 
         function bind(node: Node) {
             node.parent = parent;
+            
             switch (node.kind) {
                 case SyntaxKind.TypeParameter:
                     bindDeclaration(<Declaration>node, SymbolFlags.TypeParameter, SymbolFlags.TypeParameterExcludes, /*isBlockScopeContainer*/ false);
@@ -386,7 +399,7 @@ module ts {
                     if (isBindingPattern((<Declaration>node).name)) {
                         bindChildren(node, 0, /*isBlockScopeContainer*/ false);
                     }
-                    else if (getCombinedNodeFlags(node) & NodeFlags.BlockScoped) {
+                    else if (isBlockOrCatchScoped(<Declaration>node)) {
                         bindBlockScopedVariableDeclaration(<Declaration>node);
                     }
                     else {
@@ -395,14 +408,14 @@ module ts {
                     break;
                 case SyntaxKind.PropertyDeclaration:
                 case SyntaxKind.PropertySignature:
-                    bindDeclaration(<Declaration>node, SymbolFlags.Property | ((<PropertyDeclaration>node).questionToken ? SymbolFlags.Optional : 0), SymbolFlags.PropertyExcludes, /*isBlockScopeContainer*/ false);
+                    bindPropertyOrMethodOrAccessor(<Declaration>node, SymbolFlags.Property | ((<PropertyDeclaration>node).questionToken ? SymbolFlags.Optional : 0), SymbolFlags.PropertyExcludes, /*isBlockScopeContainer*/ false);
                     break;
                 case SyntaxKind.PropertyAssignment:
                 case SyntaxKind.ShorthandPropertyAssignment:
-                    bindDeclaration(<Declaration>node, SymbolFlags.Property, SymbolFlags.PropertyExcludes, /*isBlockScopeContainer*/ false);
+                    bindPropertyOrMethodOrAccessor(<Declaration>node, SymbolFlags.Property, SymbolFlags.PropertyExcludes, /*isBlockScopeContainer*/ false);
                     break;
                 case SyntaxKind.EnumMember:
-                    bindDeclaration(<Declaration>node, SymbolFlags.EnumMember, SymbolFlags.EnumMemberExcludes, /*isBlockScopeContainer*/ false);
+                    bindPropertyOrMethodOrAccessor(<Declaration>node, SymbolFlags.EnumMember, SymbolFlags.EnumMemberExcludes, /*isBlockScopeContainer*/ false);
                     break;
                 case SyntaxKind.CallSignature:
                 case SyntaxKind.ConstructSignature:
@@ -415,7 +428,7 @@ module ts {
                     // as other properties in the object literal.  So we use SymbolFlags.PropertyExcludes
                     // so that it will conflict with any other object literal members with the same
                     // name.
-                    bindDeclaration(<Declaration>node, SymbolFlags.Method | ((<MethodDeclaration>node).questionToken ? SymbolFlags.Optional : 0),
+                    bindPropertyOrMethodOrAccessor(<Declaration>node, SymbolFlags.Method | ((<MethodDeclaration>node).questionToken ? SymbolFlags.Optional : 0),
                         isObjectLiteralMethod(node) ? SymbolFlags.PropertyExcludes : SymbolFlags.MethodExcludes, /*isBlockScopeContainer*/ true);
                     break;
                 case SyntaxKind.FunctionDeclaration:
@@ -425,10 +438,10 @@ module ts {
                     bindDeclaration(<Declaration>node, SymbolFlags.Constructor, /*symbolExcludes:*/ 0, /*isBlockScopeContainer:*/ true);
                     break;
                 case SyntaxKind.GetAccessor:
-                    bindDeclaration(<Declaration>node, SymbolFlags.GetAccessor, SymbolFlags.GetAccessorExcludes, /*isBlockScopeContainer*/ true);
+                    bindPropertyOrMethodOrAccessor(<Declaration>node, SymbolFlags.GetAccessor, SymbolFlags.GetAccessorExcludes, /*isBlockScopeContainer*/ true);
                     break;
                 case SyntaxKind.SetAccessor:
-                    bindDeclaration(<Declaration>node, SymbolFlags.SetAccessor, SymbolFlags.SetAccessorExcludes, /*isBlockScopeContainer*/ true);
+                    bindPropertyOrMethodOrAccessor(<Declaration>node, SymbolFlags.SetAccessor, SymbolFlags.SetAccessorExcludes, /*isBlockScopeContainer*/ true);
                     break;
 
                 case SyntaxKind.FunctionType:
@@ -469,18 +482,58 @@ module ts {
                 case SyntaxKind.ModuleDeclaration:
                     bindModuleDeclaration(<ModuleDeclaration>node);
                     break;
-                case SyntaxKind.ImportDeclaration:
-                    bindDeclaration(<Declaration>node, SymbolFlags.Import, SymbolFlags.ImportExcludes, /*isBlockScopeContainer*/ false);
+                case SyntaxKind.ImportEqualsDeclaration:
+                case SyntaxKind.NamespaceImport:
+                case SyntaxKind.ImportSpecifier:
+                case SyntaxKind.ExportSpecifier:
+                    bindDeclaration(<Declaration>node, SymbolFlags.Alias, SymbolFlags.AliasExcludes, /*isBlockScopeContainer*/ false);
+                    break;
+                case SyntaxKind.ImportClause:
+                    if ((<ImportClause>node).name) {
+                        bindDeclaration(<Declaration>node, SymbolFlags.Alias, SymbolFlags.AliasExcludes, /*isBlockScopeContainer*/ false);
+                    }
+                    else {
+                        bindChildren(node, 0, /*isBlockScopeContainer*/ false);
+                    }
+                    break;
+                case SyntaxKind.ExportDeclaration:
+                    if (!(<ExportDeclaration>node).exportClause) {
+                        // All export * declarations are collected in an __export symbol
+                        declareSymbol(container.symbol.exports, container.symbol, <Declaration>node, SymbolFlags.ExportStar, 0);
+                    }
+                    bindChildren(node, 0, /*isBlockScopeContainer*/ false);
+                    break;
+                case SyntaxKind.ExportAssignment:
+                    if ((<ExportAssignment>node).expression.kind === SyntaxKind.Identifier) {
+                        // An export default clause with an identifier exports all meanings of that identifier
+                        declareSymbol(container.symbol.exports, container.symbol, <Declaration>node, SymbolFlags.Alias, SymbolFlags.AliasExcludes);
+                    }
+                    else {
+                        // An export default clause with an expression exports a value
+                        declareSymbol(container.symbol.exports, container.symbol, <Declaration>node, SymbolFlags.Property, SymbolFlags.PropertyExcludes);
+                    }
+                    bindChildren(node, 0, /*isBlockScopeContainer*/ false);
                     break;
                 case SyntaxKind.SourceFile:
                     if (isExternalModule(<SourceFile>node)) {
-                        bindAnonymousDeclaration(<SourceFile>node, SymbolFlags.ValueModule, '"' + removeFileExtension((<SourceFile>node).filename) + '"', /*isBlockScopeContainer*/ true);
+                        bindAnonymousDeclaration(<SourceFile>node, SymbolFlags.ValueModule, '"' + removeFileExtension((<SourceFile>node).fileName) + '"', /*isBlockScopeContainer*/ true);
                         break;
                     }
                 case SyntaxKind.Block:
+                    // do not treat function block a block-scope container
+                    // all block-scope locals that reside in this block should go to the function locals.
+                    // Otherwise this won't be considered as redeclaration of a block scoped local:
+                    // function foo() {
+                    //  let x;
+                    //  var x;
+                    // }
+                    // 'var x' will be placed into the function locals and 'let x' - into the locals of the block
+                    bindChildren(node, 0, /*isBlockScopeContainer*/ !isFunctionLike(node.parent));
+                    break;
                 case SyntaxKind.CatchClause:
                 case SyntaxKind.ForStatement:
                 case SyntaxKind.ForInStatement:
+                case SyntaxKind.ForOfStatement:
                 case SyntaxKind.SwitchStatement:
                     bindChildren(node, 0, /*isBlockScopeContainer*/ true);
                     break;
@@ -508,6 +561,15 @@ module ts {
 
                 var classDeclaration = <ClassDeclaration>node.parent.parent;
                 declareSymbol(classDeclaration.symbol.members, classDeclaration.symbol, node, SymbolFlags.Property, SymbolFlags.PropertyExcludes);
+            }
+        }
+
+        function bindPropertyOrMethodOrAccessor(node: Declaration, symbolKind: SymbolFlags, symbolExcludes: SymbolFlags, isBlockScopeContainer: boolean) {
+            if (hasDynamicName(node)) {
+                bindAnonymousDeclaration(node, symbolKind, "__computed", isBlockScopeContainer);
+            }
+            else {
+                bindDeclaration(node, symbolKind, symbolExcludes, isBlockScopeContainer);
             }
         }
     }

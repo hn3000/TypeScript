@@ -14,4 +14,8 @@ foo(n => n.length, () => 'hi');
 function foo(o, i) {
 }
 // Infer string from second argument because it isn't context sensitive
-foo(function (n) { return n.length; }, function () { return 'hi'; });
+foo(function (n) {
+    return n.length;
+}, function () {
+    return 'hi';
+});

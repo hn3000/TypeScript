@@ -14,17 +14,17 @@ module ts.BreakpointResolver {
         }
 
         var tokenAtLocation = getTokenAtPosition(sourceFile, position);
-        var lineOfPosition = sourceFile.getLineAndCharacterFromPosition(position).line;
-        if (sourceFile.getLineAndCharacterFromPosition(tokenAtLocation.getStart()).line > lineOfPosition) {
+        var lineOfPosition = sourceFile.getLineAndCharacterOfPosition(position).line;
+        if (sourceFile.getLineAndCharacterOfPosition(tokenAtLocation.getStart()).line > lineOfPosition) {
             // Get previous token if the token is returned starts on new line
-            // eg: var x =10; |--- curser is here
+            // eg: var x =10; |--- cursor is here
             //     var y = 10; 
             // token at position will return var keyword on second line as the token but we would like to use 
             // token on same line if trailing trivia (comments or white spaces on same line) part of the last token on that line
             tokenAtLocation = findPrecedingToken(tokenAtLocation.pos, sourceFile);
 
             // Its a blank line
-            if (!tokenAtLocation || sourceFile.getLineAndCharacterFromPosition(tokenAtLocation.getEnd()).line !== lineOfPosition) {
+            if (!tokenAtLocation || sourceFile.getLineAndCharacterOfPosition(tokenAtLocation.getEnd()).line !== lineOfPosition) {
                 return undefined;
             }
         }
@@ -42,7 +42,7 @@ module ts.BreakpointResolver {
         }
 
         function spanInNodeIfStartsOnSameLine(node: Node, otherwiseOnNode?: Node): TextSpan {
-            if (node && lineOfPosition === sourceFile.getLineAndCharacterFromPosition(node.getStart()).line) {
+            if (node && lineOfPosition === sourceFile.getLineAndCharacterOfPosition(node.getStart()).line) {
                 return spanInNode(node);
             }
             return spanInNode(otherwiseOnNode);
@@ -69,7 +69,7 @@ module ts.BreakpointResolver {
                         return textSpan(node);
                     }
 
-                    if (node.parent.kind === SyntaxKind.BinaryExpression && (<BinaryExpression>node.parent).operator === SyntaxKind.CommaToken) {
+                    if (node.parent.kind === SyntaxKind.BinaryExpression && (<BinaryExpression>node.parent).operatorToken.kind === SyntaxKind.CommaToken) {
                         // if this is comma expression, the breakpoint is possible in this expression
                         return textSpan(node);
                     }
@@ -151,8 +151,9 @@ module ts.BreakpointResolver {
                         return spanInForStatement(<ForStatement>node);
 
                     case SyntaxKind.ForInStatement:
+                    case SyntaxKind.ForOfStatement:
                         // span on for (a in ...)
-                        return textSpan(node, findNextToken((<ForInStatement>node).expression, node));
+                        return textSpan(node, findNextToken((<ForInStatement | ForOfStatement>node).expression, node));
 
                     case SyntaxKind.SwitchStatement:
                         // span on switch(...)
@@ -173,11 +174,19 @@ module ts.BreakpointResolver {
 
                     case SyntaxKind.ExportAssignment:
                         // span on export = id
-                        return textSpan(node, (<ExportAssignment>node).exportName);
+                        return textSpan(node, (<ExportAssignment>node).expression);
+
+                    case SyntaxKind.ImportEqualsDeclaration:
+                        // import statement without including semicolon
+                        return textSpan(node, (<ImportEqualsDeclaration>node).moduleReference);
 
                     case SyntaxKind.ImportDeclaration:
                         // import statement without including semicolon
-                        return textSpan(node,(<ImportDeclaration>node).moduleReference);
+                        return textSpan(node, (<ImportDeclaration>node).moduleSpecifier);
+
+                    case SyntaxKind.ExportDeclaration:
+                        // import statement without including semicolon
+                        return textSpan(node, (<ExportDeclaration>node).moduleSpecifier);
 
                     case SyntaxKind.ModuleDeclaration:
                         // span on complete module if it is instantiated
@@ -250,7 +259,7 @@ module ts.BreakpointResolver {
                         }
 
                         // return type of function go to previous token
-                        if (isAnyFunction(node.parent) && (<FunctionLikeDeclaration>node.parent).type === node) {
+                        if (isFunctionLike(node.parent) && (<FunctionLikeDeclaration>node.parent).type === node) {
                             return spanInPreviousNode(node);
                         }
 
@@ -261,7 +270,8 @@ module ts.BreakpointResolver {
 
             function spanInVariableDeclaration(variableDeclaration: VariableDeclaration): TextSpan {
                 // If declaration of for in statement, just set the span in parent
-                if (variableDeclaration.parent.parent.kind === SyntaxKind.ForInStatement) {
+                if (variableDeclaration.parent.parent.kind === SyntaxKind.ForInStatement ||
+                    variableDeclaration.parent.parent.kind === SyntaxKind.ForOfStatement) {
                     return spanInNode(variableDeclaration.parent.parent);
                 }
 
@@ -362,6 +372,7 @@ module ts.BreakpointResolver {
                     case SyntaxKind.WhileStatement:
                     case SyntaxKind.IfStatement:
                     case SyntaxKind.ForInStatement:
+                    case SyntaxKind.ForOfStatement:
                         return spanInNodeIfStartsOnSameLine(block.parent, block.statements[0]);
 
                     // Set span on previous token if it starts on same line otherwise on the first statement of the block
@@ -488,7 +499,7 @@ module ts.BreakpointResolver {
 
             function spanInColonToken(node: Node): TextSpan {
                 // Is this : specifying return annotation of the function declaration
-                if (isAnyFunction(node.parent) || node.parent.kind === SyntaxKind.PropertyAssignment) {
+                if (isFunctionLike(node.parent) || node.parent.kind === SyntaxKind.PropertyAssignment) {
                     return spanInPreviousNode(node);
                 }
 

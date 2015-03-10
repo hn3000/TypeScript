@@ -49,6 +49,25 @@ module FourSlashInterface {
         position: number;
         data?: any;
     }
+    
+    export interface EditorOptions {
+        IndentSize: number;
+        TabSize: number;
+        NewLineCharacter: string;
+        ConvertTabsToSpaces: boolean;
+    }
+
+    export interface FormatCodeOptions extends EditorOptions {
+        InsertSpaceAfterCommaDelimiter: boolean;
+        InsertSpaceAfterSemicolonInForStatements: boolean;
+        InsertSpaceBeforeAndAfterBinaryOperators: boolean;
+        InsertSpaceAfterKeywordsInControlFlowStatements: boolean;
+        InsertSpaceAfterFunctionKeywordForAnonymousFunctions: boolean;
+        InsertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis: boolean;
+        PlaceOpenBraceOnNewLineForFunctions: boolean;
+        PlaceOpenBraceOnNewLineForControlBlocks: boolean;
+        [s: string]: boolean | number| string;
+    }
 
     export interface Range {
         fileName: string;
@@ -77,16 +96,6 @@ module FourSlashInterface {
 
         public markerByName(s: string): Marker {
             return FourSlash.currentTestState.getMarkerByName(s);
-        }
-    }
-
-    export class diagnostics {
-        public validateTypeAtCurrentPosition() {
-            return this.validateTypesAtPositions(FourSlash.currentTestState.currentCaretPosition);
-        }
-
-        public validateTypesAtPositions(...positions: number[]) {
-            return FourSlash.currentTestState.verifyTypesAgainstFullCheckAtPositions(positions);
         }
     }
 
@@ -170,6 +179,10 @@ module FourSlashInterface {
 
         public completionListIsEmpty() {
             FourSlash.currentTestState.verifyCompletionListIsEmpty(this.negative);
+        }
+
+        public completionListAllowsNewIdentifier() {
+            FourSlash.currentTestState.verifyCompletionListAllowsNewIdentifier(this.negative);
         }
 
         public memberListIsEmpty() {
@@ -262,6 +275,10 @@ module FourSlashInterface {
 
         public currentFileContentIs(text: string) {
             FourSlash.currentTestState.verifyCurrentFileContent(text);
+        }
+
+        public verifyGetEmitOutputForCurrentFile(expected: string): void {
+            FourSlash.currentTestState.verifyGetEmitOutputForCurrentFile(expected);
         }
 
         public currentParameterHelpArgumentNameIs(name: string) {
@@ -543,6 +560,14 @@ module FourSlashInterface {
             FourSlash.currentTestState.formatDocument();
         }
 
+        public copyFormatOptions(): FormatCodeOptions {
+            return FourSlash.currentTestState.copyFormatOptions();
+        }
+
+        public setFormatOptions(options: FormatCodeOptions) {
+            return FourSlash.currentTestState.setFormatOptions(options);
+        }
+
         public selection(startMarker: string, endMarker: string) {
             FourSlash.currentTestState.formatSelection(FourSlash.currentTestState.getMarkerByName(startMarker).position, FourSlash.currentTestState.getMarkerByName(endMarker).position);
         }
@@ -557,11 +582,11 @@ module FourSlashInterface {
 
     export class cancellation {
         public resetCancelled() {
-            FourSlash.currentTestState.cancellationToken.resetCancelled();
+            FourSlash.currentTestState.resetCancelled();
         }
 
         public setCancelled(numberOfCalls: number = 0) {
-            FourSlash.currentTestState.cancellationToken.setCancelled(numberOfCalls);
+            FourSlash.currentTestState.setCancelled(numberOfCalls);
         }
     }
 
@@ -643,7 +668,6 @@ module fs {
     export var edit = new FourSlashInterface.edit();
     export var debug = new FourSlashInterface.debug();
     export var format = new FourSlashInterface.format();
-    export var diagnostics = new FourSlashInterface.diagnostics();
     export var cancellation = new FourSlashInterface.cancellation();
 }
 module ts {
@@ -662,6 +686,5 @@ var verify = new FourSlashInterface.verify();
 var edit = new FourSlashInterface.edit();
 var debug = new FourSlashInterface.debug();
 var format = new FourSlashInterface.format();
-var diagnostics = new FourSlashInterface.diagnostics();
 var cancellation = new FourSlashInterface.cancellation();
 var classification = FourSlashInterface.classification;

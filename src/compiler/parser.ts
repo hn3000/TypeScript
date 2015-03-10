@@ -3,6 +3,7 @@
 
 module ts {
     var nodeConstructors = new Array<new () => Node>(SyntaxKind.Count);
+    /* @internal */ export var parseTime = 0;
 
     export function getNodeConstructor(kind: SyntaxKind): new () => Node {
         return nodeConstructors[kind] || (nodeConstructors[kind] = objectAllocator.getNodeConstructor(kind));
@@ -119,6 +120,7 @@ module ts {
                 return visitNodes(cbNodes, (<ObjectLiteralExpression>node).properties);
             case SyntaxKind.PropertyAccessExpression:
                 return visitNode(cbNode, (<PropertyAccessExpression>node).expression) ||
+                    visitNode(cbNode, (<PropertyAccessExpression>node).dotToken) ||
                     visitNode(cbNode, (<PropertyAccessExpression>node).name);
             case SyntaxKind.ElementAccessExpression:
                 return visitNode(cbNode, (<ElementAccessExpression>node).expression) ||
@@ -151,10 +153,13 @@ module ts {
                 return visitNode(cbNode, (<PostfixUnaryExpression>node).operand);
             case SyntaxKind.BinaryExpression:
                 return visitNode(cbNode, (<BinaryExpression>node).left) ||
+                    visitNode(cbNode, (<BinaryExpression>node).operatorToken) ||
                     visitNode(cbNode, (<BinaryExpression>node).right);
             case SyntaxKind.ConditionalExpression:
                 return visitNode(cbNode, (<ConditionalExpression>node).condition) ||
+                    visitNode(cbNode, (<ConditionalExpression>node).questionToken) ||
                     visitNode(cbNode, (<ConditionalExpression>node).whenTrue) ||
+                    visitNode(cbNode, (<ConditionalExpression>node).colonToken) ||
                     visitNode(cbNode, (<ConditionalExpression>node).whenFalse);
             case SyntaxKind.SpreadElementExpression:
                 return visitNode(cbNode, (<SpreadElementExpression>node).expression);
@@ -190,6 +195,10 @@ module ts {
                 return visitNode(cbNode, (<ForInStatement>node).initializer) ||
                     visitNode(cbNode, (<ForInStatement>node).expression) ||
                     visitNode(cbNode, (<ForInStatement>node).statement);
+            case SyntaxKind.ForOfStatement:
+                return visitNode(cbNode, (<ForOfStatement>node).initializer) ||
+                    visitNode(cbNode, (<ForOfStatement>node).expression) ||
+                    visitNode(cbNode, (<ForOfStatement>node).statement);
             case SyntaxKind.ContinueStatement:
             case SyntaxKind.BreakStatement:
                 return visitNode(cbNode, (<BreakOrContinueStatement>node).label);
@@ -216,8 +225,7 @@ module ts {
                     visitNode(cbNode, (<TryStatement>node).catchClause) ||
                     visitNode(cbNode, (<TryStatement>node).finallyBlock);
             case SyntaxKind.CatchClause:
-                return visitNode(cbNode, (<CatchClause>node).name) ||
-                    visitNode(cbNode, (<CatchClause>node).type) ||
+                return visitNode(cbNode, (<CatchClause>node).variableDeclaration) ||
                     visitNode(cbNode, (<CatchClause>node).block);
             case SyntaxKind.ClassDeclaration:
                 return visitNodes(cbNodes, node.modifiers) ||
@@ -246,13 +254,33 @@ module ts {
                 return visitNodes(cbNodes, node.modifiers) ||
                     visitNode(cbNode, (<ModuleDeclaration>node).name) ||
                     visitNode(cbNode, (<ModuleDeclaration>node).body);
+            case SyntaxKind.ImportEqualsDeclaration:
+                return visitNodes(cbNodes, node.modifiers) ||
+                    visitNode(cbNode, (<ImportEqualsDeclaration>node).name) ||
+                    visitNode(cbNode, (<ImportEqualsDeclaration>node).moduleReference);
             case SyntaxKind.ImportDeclaration:
                 return visitNodes(cbNodes, node.modifiers) ||
-                    visitNode(cbNode, (<ImportDeclaration>node).name) ||
-                    visitNode(cbNode, (<ImportDeclaration>node).moduleReference);
+                    visitNode(cbNode, (<ImportDeclaration>node).importClause) ||
+                    visitNode(cbNode, (<ImportDeclaration>node).moduleSpecifier);
+            case SyntaxKind.ImportClause:
+                return visitNode(cbNode, (<ImportClause>node).name) ||
+                    visitNode(cbNode, (<ImportClause>node).namedBindings);
+            case SyntaxKind.NamespaceImport:
+                return visitNode(cbNode, (<NamespaceImport>node).name);
+            case SyntaxKind.NamedImports:
+            case SyntaxKind.NamedExports:
+                return visitNodes(cbNodes, (<NamedImportsOrExports>node).elements);
+            case SyntaxKind.ExportDeclaration:
+                return visitNodes(cbNodes, node.modifiers) ||
+                    visitNode(cbNode, (<ExportDeclaration>node).exportClause) ||
+                    visitNode(cbNode, (<ExportDeclaration>node).moduleSpecifier);
+            case SyntaxKind.ImportSpecifier:
+            case SyntaxKind.ExportSpecifier:
+                return visitNode(cbNode, (<ImportOrExportSpecifier>node).propertyName) ||
+                    visitNode(cbNode, (<ImportOrExportSpecifier>node).name);
             case SyntaxKind.ExportAssignment:
                 return visitNodes(cbNodes, node.modifiers) ||
-                    visitNode(cbNode, (<ExportAssignment>node).exportName);
+                    visitNode(cbNode, (<ExportAssignment>node).expression);
             case SyntaxKind.TemplateExpression:
                 return visitNode(cbNode, (<TemplateExpression>node).head) || visitNodes(cbNodes, (<TemplateExpression>node).templateSpans);
             case SyntaxKind.TemplateSpan:
@@ -267,27 +295,28 @@ module ts {
     }
 
     const enum ParsingContext {
-        SourceElements,          // Elements in source file
-        ModuleElements,          // Elements in module declaration
-        BlockStatements,         // Statements in block
-        SwitchClauses,           // Clauses in switch statement
-        SwitchClauseStatements,  // Statements in switch clause
-        TypeMembers,             // Members in interface or type literal
-        ClassMembers,            // Members in class declaration
-        EnumMembers,             // Members in enum declaration
-        TypeReferences,          // Type references in extends or implements clause
-        VariableDeclarations,    // Variable declarations in variable statement
-        ObjectBindingElements,   // Binding elements in object binding list
-        ArrayBindingElements,    // Binding elements in array binding list
-        ArgumentExpressions,     // Expressions in argument list
-        ObjectLiteralMembers,    // Members in object literal
-        ArrayLiteralMembers,     // Members in array literal
-        Parameters,              // Parameters in parameter list
-        TypeParameters,          // Type parameters in type parameter list
-        TypeArguments,           // Type arguments in type argument list
-        TupleElementTypes,       // Element types in tuple element type list
-        HeritageClauses,         // Heritage clauses for a class or interface declaration.
-        Count                    // Number of parsing contexts
+        SourceElements,            // Elements in source file
+        ModuleElements,            // Elements in module declaration
+        BlockStatements,           // Statements in block
+        SwitchClauses,             // Clauses in switch statement
+        SwitchClauseStatements,    // Statements in switch clause
+        TypeMembers,               // Members in interface or type literal
+        ClassMembers,              // Members in class declaration
+        EnumMembers,               // Members in enum declaration
+        TypeReferences,            // Type references in extends or implements clause
+        VariableDeclarations,      // Variable declarations in variable statement
+        ObjectBindingElements,     // Binding elements in object binding list
+        ArrayBindingElements,      // Binding elements in array binding list
+        ArgumentExpressions,       // Expressions in argument list
+        ObjectLiteralMembers,      // Members in object literal
+        ArrayLiteralMembers,       // Members in array literal
+        Parameters,                // Parameters in parameter list
+        TypeParameters,            // Type parameters in type parameter list
+        TypeArguments,             // Type arguments in type argument list
+        TupleElementTypes,         // Element types in tuple element type list
+        HeritageClauses,           // Heritage clauses for a class or interface declaration.
+        ImportOrExportSpecifiers,  // Named import clause's import specifier list
+        Count                      // Number of parsing contexts
     }
 
     const enum Tristate {
@@ -298,26 +327,27 @@ module ts {
 
     function parsingContextErrors(context: ParsingContext): DiagnosticMessage {
         switch (context) {
-            case ParsingContext.SourceElements:         return Diagnostics.Declaration_or_statement_expected;
-            case ParsingContext.ModuleElements:         return Diagnostics.Declaration_or_statement_expected;
-            case ParsingContext.BlockStatements:        return Diagnostics.Statement_expected;
-            case ParsingContext.SwitchClauses:          return Diagnostics.case_or_default_expected;
-            case ParsingContext.SwitchClauseStatements: return Diagnostics.Statement_expected;
-            case ParsingContext.TypeMembers:            return Diagnostics.Property_or_signature_expected;
-            case ParsingContext.ClassMembers:           return Diagnostics.Unexpected_token_A_constructor_method_accessor_or_property_was_expected;
-            case ParsingContext.EnumMembers:            return Diagnostics.Enum_member_expected;
-            case ParsingContext.TypeReferences:     return Diagnostics.Type_reference_expected;
-            case ParsingContext.VariableDeclarations:   return Diagnostics.Variable_declaration_expected;
-            case ParsingContext.ObjectBindingElements:  return Diagnostics.Property_destructuring_pattern_expected;
-            case ParsingContext.ArrayBindingElements:   return Diagnostics.Array_element_destructuring_pattern_expected;
-            case ParsingContext.ArgumentExpressions:    return Diagnostics.Argument_expression_expected;
-            case ParsingContext.ObjectLiteralMembers:   return Diagnostics.Property_assignment_expected;
-            case ParsingContext.ArrayLiteralMembers:    return Diagnostics.Expression_or_comma_expected;
-            case ParsingContext.Parameters:             return Diagnostics.Parameter_declaration_expected;
-            case ParsingContext.TypeParameters:         return Diagnostics.Type_parameter_declaration_expected;
-            case ParsingContext.TypeArguments:          return Diagnostics.Type_argument_expected;
-            case ParsingContext.TupleElementTypes:      return Diagnostics.Type_expected;
-            case ParsingContext.HeritageClauses:        return Diagnostics.Unexpected_token_expected;
+            case ParsingContext.SourceElements:           return Diagnostics.Declaration_or_statement_expected;
+            case ParsingContext.ModuleElements:           return Diagnostics.Declaration_or_statement_expected;
+            case ParsingContext.BlockStatements:          return Diagnostics.Statement_expected;
+            case ParsingContext.SwitchClauses:            return Diagnostics.case_or_default_expected;
+            case ParsingContext.SwitchClauseStatements:   return Diagnostics.Statement_expected;
+            case ParsingContext.TypeMembers:              return Diagnostics.Property_or_signature_expected;
+            case ParsingContext.ClassMembers:             return Diagnostics.Unexpected_token_A_constructor_method_accessor_or_property_was_expected;
+            case ParsingContext.EnumMembers:              return Diagnostics.Enum_member_expected;
+            case ParsingContext.TypeReferences:           return Diagnostics.Type_reference_expected;
+            case ParsingContext.VariableDeclarations:     return Diagnostics.Variable_declaration_expected;
+            case ParsingContext.ObjectBindingElements:    return Diagnostics.Property_destructuring_pattern_expected;
+            case ParsingContext.ArrayBindingElements:     return Diagnostics.Array_element_destructuring_pattern_expected;
+            case ParsingContext.ArgumentExpressions:      return Diagnostics.Argument_expression_expected;
+            case ParsingContext.ObjectLiteralMembers:     return Diagnostics.Property_assignment_expected;
+            case ParsingContext.ArrayLiteralMembers:      return Diagnostics.Expression_or_comma_expected;
+            case ParsingContext.Parameters:               return Diagnostics.Parameter_declaration_expected;
+            case ParsingContext.TypeParameters:           return Diagnostics.Type_parameter_declaration_expected;
+            case ParsingContext.TypeArguments:            return Diagnostics.Type_argument_expected;
+            case ParsingContext.TupleElementTypes:        return Diagnostics.Type_expected;
+            case ParsingContext.HeritageClauses:          return Diagnostics.Unexpected_token_expected;
+            case ParsingContext.ImportOrExportSpecifiers: return Diagnostics.Identifier_expected;
         }
     };
 
@@ -330,16 +360,22 @@ module ts {
             case SyntaxKind.ExportKeyword: return NodeFlags.Export;
             case SyntaxKind.DeclareKeyword: return NodeFlags.Ambient;
             case SyntaxKind.ConstKeyword: return NodeFlags.Const;
+            case SyntaxKind.DefaultKeyword: return NodeFlags.Default;
         }
         return 0;
     }
 
     function fixupParentReferences(sourceFile: SourceFile) {
-        // normally parent references are set during binding.
-        // however here SourceFile data is used only for syntactic features so running the whole binding process is an overhead.
-        // walk over the nodes and set parent references
+        // normally parent references are set during binding. However, for clients that only need
+        // a syntax tree, and no semantic features, then the binding process is an unnecessary 
+        // overhead.  This functions allows us to set all the parents, without all the expense of
+        // binding.
+
         var parent: Node = sourceFile;
-        function walk(n: Node): void {
+        forEachChild(sourceFile, visitNode);
+        return;
+
+        function visitNode(n: Node): void {
             // walk down setting parents that differ from the parent we think it should be.  This
             // allows us to quickly bail out of setting parents for subtrees during incremental 
             // parsing
@@ -348,12 +384,452 @@ module ts {
 
                 var saveParent = parent;
                 parent = n;
-                forEachChild(n, walk);
+                forEachChild(n, visitNode);
                 parent = saveParent;
             }
         }
+    }
 
-        forEachChild(sourceFile, walk);
+    function shouldCheckNode(node: Node) {
+        switch (node.kind) {
+            case SyntaxKind.StringLiteral:
+            case SyntaxKind.NumericLiteral:
+            case SyntaxKind.Identifier:
+                return true;
+        }
+
+        return false;
+    }
+
+    function moveElementEntirelyPastChangeRange(element: IncrementalElement, isArray: boolean, delta: number, oldText: string, newText: string, aggressiveChecks: boolean) {
+        if (isArray) {
+            visitArray(<IncrementalNodeArray>element);
+        }
+        else {
+            visitNode(<IncrementalNode>element);
+        }
+        return;
+
+        function visitNode(node: IncrementalNode) {
+            if (aggressiveChecks && shouldCheckNode(node)) {
+                var text = oldText.substring(node.pos, node.end);
+            }
+
+            // Ditch any existing LS children we may have created.  This way we can avoid 
+            // moving them forward.
+            node._children = undefined;
+            node.pos += delta;
+            node.end += delta;
+
+            if (aggressiveChecks && shouldCheckNode(node)) {
+                Debug.assert(text === newText.substring(node.pos, node.end));
+            }
+
+            forEachChild(node, visitNode, visitArray);
+            checkNodePositions(node, aggressiveChecks);
+        }
+
+        function visitArray(array: IncrementalNodeArray) {
+            array._children = undefined;
+            array.pos += delta;
+            array.end += delta;
+
+            for (var i = 0, n = array.length; i < n; i++) {
+                visitNode(array[i]);
+            }
+        }
+    }
+
+    function adjustIntersectingElement(element: IncrementalElement, changeStart: number, changeRangeOldEnd: number, changeRangeNewEnd: number, delta: number) {
+        Debug.assert(element.end >= changeStart, "Adjusting an element that was entirely before the change range");
+        Debug.assert(element.pos <= changeRangeOldEnd, "Adjusting an element that was entirely after the change range");
+        Debug.assert(element.pos <= element.end);
+
+        // We have an element that intersects the change range in some way.  It may have its
+        // start, or its end (or both) in the changed range.  We want to adjust any part
+        // that intersects such that the final tree is in a consistent state.  i.e. all
+        // chlidren have spans within the span of their parent, and all siblings are ordered
+        // properly.
+
+        // We may need to update both the 'pos' and the 'end' of the element.
+
+        // If the 'pos' is before the start of the change, then we don't need to touch it.  
+        // If it isn't, then the 'pos' must be inside the change.  How we update it will 
+        // depend if delta is  positive or negative.  If delta is positive then we have 
+        // something like:
+        //
+        //  -------------------AAA-----------------
+        //  -------------------BBBCCCCCCC-----------------
+        //
+        // In this case, we consider any node that started in the change range to still be
+        // starting at the same position.
+        //
+        // however, if the delta is negative, then we instead have something like this:
+        //
+        //  -------------------XXXYYYYYYY-----------------
+        //  -------------------ZZZ-----------------
+        //
+        // In this case, any element that started in the 'X' range will keep its position.  
+        // However any element htat started after that will have their pos adjusted to be
+        // at the end of the new range.  i.e. any node that started in the 'Y' range will
+        // be adjusted to have their start at the end of the 'Z' range.
+        //
+        // The element will keep its position if possible.  Or Move backward to the new-end
+        // if it's in the 'Y' range.
+        element.pos = Math.min(element.pos, changeRangeNewEnd);
+
+        // If the 'end' is after the change range, then we always adjust it by the delta
+        // amount.  However, if the end is in the change range, then how we adjust it 
+        // will depend on if delta is  positive or negative.  If delta is positive then we
+        // have something like:
+        //
+        //  -------------------AAA-----------------
+        //  -------------------BBBCCCCCCC-----------------
+        //
+        // In this case, we consider any node that ended inside the change range to keep its
+        // end position.
+        //
+        // however, if the delta is negative, then we instead have something like this:
+        //
+        //  -------------------XXXYYYYYYY-----------------
+        //  -------------------ZZZ-----------------
+        //
+        // In this case, any element that ended in the 'X' range will keep its position.  
+        // However any element htat ended after that will have their pos adjusted to be
+        // at the end of the new range.  i.e. any node that ended in the 'Y' range will
+        // be adjusted to have their end at the end of the 'Z' range.
+        if (element.end >= changeRangeOldEnd) {
+            // Element ends after the change range.  Always adjust the end pos.
+            element.end += delta;
+        }
+        else {
+            // Element ends in the change range.  The element will keep its position if 
+            // possible. Or Move backward to the new-end if it's in the 'Y' range.
+            element.end = Math.min(element.end, changeRangeNewEnd);
+        }
+
+        Debug.assert(element.pos <= element.end);
+        if (element.parent) {
+            Debug.assert(element.pos >= element.parent.pos);
+            Debug.assert(element.end <= element.parent.end);
+        }
+    }
+
+    function checkNodePositions(node: Node, aggressiveChecks: boolean) {
+        if (aggressiveChecks) {
+            var pos = node.pos;
+            forEachChild(node, child => {
+                Debug.assert(child.pos >= pos);
+                pos = child.end;
+            });
+            Debug.assert(pos <= node.end);
+        }
+    }
+
+    function updateTokenPositionsAndMarkElements(
+        sourceFile: IncrementalNode,
+        changeStart: number,
+        changeRangeOldEnd: number,
+        changeRangeNewEnd: number,
+        delta: number,
+        oldText: string,
+        newText: string,
+        aggressiveChecks: boolean): void {
+
+        visitNode(sourceFile);
+        return;
+
+        function visitNode(child: IncrementalNode) {
+            Debug.assert(child.pos <= child.end);
+            if (child.pos > changeRangeOldEnd) {
+                // Node is entirely past the change range.  We need to move both its pos and 
+                // end, forward or backward appropriately.
+                moveElementEntirelyPastChangeRange(child, /*isArray:*/ false, delta, oldText, newText, aggressiveChecks);
+                return;
+            }
+
+            // Check if the element intersects the change range.  If it does, then it is not
+            // reusable.  Also, we'll need to recurse to see what constituent portions we may
+            // be able to use.
+            var fullEnd = child.end;
+            if (fullEnd >= changeStart) {
+                child.intersectsChange = true;
+                child._children = undefined;
+
+                // Adjust the pos or end (or both) of the intersecting element accordingly.
+                adjustIntersectingElement(child, changeStart, changeRangeOldEnd, changeRangeNewEnd, delta);
+                forEachChild(child, visitNode, visitArray);
+
+                checkNodePositions(child, aggressiveChecks);
+                return;
+            }
+
+            // Otherwise, the node is entirely before the change range.  No need to do anything with it.
+            Debug.assert(fullEnd < changeStart);
+        }
+
+        function visitArray(array: IncrementalNodeArray) {
+            Debug.assert(array.pos <= array.end);
+            if (array.pos > changeRangeOldEnd) {
+                // Array is entirely after the change range.  We need to move it, and move any of
+                // its children.
+                moveElementEntirelyPastChangeRange(array, /*isArray:*/ true, delta, oldText, newText, aggressiveChecks);
+                return;
+            }
+
+            // Check if the element intersects the change range.  If it does, then it is not
+            // reusable.  Also, we'll need to recurse to see what constituent portions we may
+            // be able to use.
+            var fullEnd = array.end;
+            if (fullEnd >= changeStart) {
+                array.intersectsChange = true;
+                array._children = undefined;
+
+                // Adjust the pos or end (or both) of the intersecting array accordingly.
+                adjustIntersectingElement(array, changeStart, changeRangeOldEnd, changeRangeNewEnd, delta);
+                for (var i = 0, n = array.length; i < n; i++) {
+                    visitNode(array[i]);
+                }
+                return;
+            }
+
+            // Otherwise, the array is entirely before the change range.  No need to do anything with it.
+            Debug.assert(fullEnd < changeStart);
+        }
+    }
+
+    function extendToAffectedRange(sourceFile: SourceFile, changeRange: TextChangeRange): TextChangeRange {
+        // Consider the following code:
+        //      void foo() { /; }
+        //
+        // If the text changes with an insertion of / just before the semicolon then we end up with:
+        //      void foo() { //; }
+        //
+        // If we were to just use the changeRange a is, then we would not rescan the { token 
+        // (as it does not intersect the actual original change range).  Because an edit may
+        // change the token touching it, we actually need to look back *at least* one token so
+        // that the prior token sees that change.  
+        var maxLookahead = 1;
+
+        var start = changeRange.span.start;
+
+        // the first iteration aligns us with the change start. subsequent iteration move us to
+        // the left by maxLookahead tokens.  We only need to do this as long as we're not at the
+        // start of the tree.
+        for (var i = 0; start > 0 && i <= maxLookahead; i++) {
+            var nearestNode = findNearestNodeStartingBeforeOrAtPosition(sourceFile, start);
+            Debug.assert(nearestNode.pos <= start);
+            var position = nearestNode.pos;
+
+            start = Math.max(0, position - 1);
+        }
+
+        var finalSpan = createTextSpanFromBounds(start, textSpanEnd(changeRange.span));
+        var finalLength = changeRange.newLength + (changeRange.span.start - start);
+
+        return createTextChangeRange(finalSpan, finalLength);
+    }
+
+    function findNearestNodeStartingBeforeOrAtPosition(sourceFile: SourceFile, position: number): Node {
+        var bestResult: Node = sourceFile;
+        var lastNodeEntirelyBeforePosition: Node;
+
+        forEachChild(sourceFile, visit);
+
+        if (lastNodeEntirelyBeforePosition) {
+            var lastChildOfLastEntireNodeBeforePosition = getLastChild(lastNodeEntirelyBeforePosition);
+            if (lastChildOfLastEntireNodeBeforePosition.pos > bestResult.pos) {
+                bestResult = lastChildOfLastEntireNodeBeforePosition;
+            }
+        }
+
+        return bestResult;
+
+        function getLastChild(node: Node): Node {
+            while (true) {
+                var lastChild = getLastChildWorker(node);
+                if (lastChild) {
+                    node = lastChild;
+                }
+                else {
+                    return node;
+                }
+            }
+        }
+
+        function getLastChildWorker(node: Node): Node {
+            var last: Node = undefined;
+            forEachChild(node, child => {
+                if (nodeIsPresent(child)) {
+                    last = child;
+                }
+            });
+            return last;
+        }
+
+        function visit(child: Node) {
+            if (nodeIsMissing(child)) {
+                // Missing nodes are effectively invisible to us.  We never even consider them
+                // When trying to find the nearest node before us.
+                return;
+            }
+
+            // If the child intersects this position, then this node is currently the nearest 
+            // node that starts before the position.
+            if (child.pos <= position) {
+                if (child.pos >= bestResult.pos) {
+                    // This node starts before the position, and is closer to the position than
+                    // the previous best node we found.  It is now the new best node.
+                    bestResult = child;
+                }
+
+                // Now, the node may overlap the position, or it may end entirely before the
+                // position.  If it overlaps with the position, then either it, or one of its
+                // children must be the nearest node before the position.  So we can just 
+                // recurse into this child to see if we can find something better.
+                if (position < child.end) {
+                    // The nearest node is either this child, or one of the children inside
+                    // of it.  We've already marked this child as the best so far.  Recurse
+                    // in case one of the children is better.
+                    forEachChild(child, visit);
+
+                    // Once we look at the children of this node, then there's no need to
+                    // continue any further.
+                    return true;
+                }
+                else {
+                    Debug.assert(child.end <= position);
+                    // The child ends entirely before this position.  Say you have the following
+                    // (where $ is the position)
+                    // 
+                    //      <complex expr 1> ? <complex expr 2> $ : <...> <...> 
+                    //
+                    // We would want to find the nearest preceding node in "complex expr 2". 
+                    // To support that, we keep track of this node, and once we're done searching
+                    // for a best node, we recurse down this node to see if we can find a good
+                    // result in it.
+                    //
+                    // This approach allows us to quickly skip over nodes that are entirely 
+                    // before the position, while still allowing us to find any nodes in the
+                    // last one that might be what we want.
+                    lastNodeEntirelyBeforePosition = child;
+                }
+            }
+            else {
+                Debug.assert(child.pos > position);
+                // We're now at a node that is entirely past the position we're searching for.
+                // This node (and all following nodes) could never contribute to the result,
+                // so just skip them by returning 'true' here.
+                return true;
+            }
+        }
+    }
+
+    function checkChangeRange(sourceFile: SourceFile, newText: string, textChangeRange: TextChangeRange, aggressiveChecks: boolean) {
+        var oldText = sourceFile.text;
+        if (textChangeRange) {
+            Debug.assert((oldText.length - textChangeRange.span.length + textChangeRange.newLength) === newText.length);
+
+            if (aggressiveChecks || Debug.shouldAssert(AssertionLevel.VeryAggressive)) {
+                var oldTextPrefix = oldText.substr(0, textChangeRange.span.start);
+                var newTextPrefix = newText.substr(0, textChangeRange.span.start);
+                Debug.assert(oldTextPrefix === newTextPrefix);
+
+                var oldTextSuffix = oldText.substring(textSpanEnd(textChangeRange.span), oldText.length);
+                var newTextSuffix = newText.substring(textSpanEnd(textChangeRangeNewSpan(textChangeRange)), newText.length);
+                Debug.assert(oldTextSuffix === newTextSuffix);
+            }
+        }
+    }
+
+    // Produces a new SourceFile for the 'newText' provided. The 'textChangeRange' parameter 
+    // indicates what changed between the 'text' that this SourceFile has and the 'newText'.
+    // The SourceFile will be created with the compiler attempting to reuse as many nodes from 
+    // this file as possible.
+    //
+    // Note: this function mutates nodes from this SourceFile. That means any existing nodes
+    // from this SourceFile that are being held onto may change as a result (including 
+    // becoming detached from any SourceFile).  It is recommended that this SourceFile not
+    // be used once 'update' is called on it.
+    export function updateSourceFile(sourceFile: SourceFile, newText: string, textChangeRange: TextChangeRange, aggressiveChecks?: boolean): SourceFile {
+        aggressiveChecks = aggressiveChecks || Debug.shouldAssert(AssertionLevel.Aggressive);
+
+        checkChangeRange(sourceFile, newText, textChangeRange, aggressiveChecks);
+        if (textChangeRangeIsUnchanged(textChangeRange)) {
+            // if the text didn't change, then we can just return our current source file as-is.
+            return sourceFile;
+        }
+
+        if (sourceFile.statements.length === 0) {
+            // If we don't have any statements in the current source file, then there's no real
+            // way to incrementally parse.  So just do a full parse instead.
+            return parseSourceFile(sourceFile.fileName, newText, sourceFile.languageVersion, /*syntaxCursor*/ undefined, /*setNodeParents*/ true)
+        }
+
+        // Make sure we're not trying to incrementally update a source file more than once.  Once
+        // we do an update the original source file is considered unusbale from that point onwards. 
+        //
+        // This is because we do incremental parsing in-place.  i.e. we take nodes from the old
+        // tree and give them new positions and parents.  From that point on, trusting the old
+        // tree at all is not possible as far too much of it may violate invariants.
+        var incrementalSourceFile = <IncrementalNode><Node>sourceFile;
+        Debug.assert(!incrementalSourceFile.hasBeenIncrementallyParsed);
+        incrementalSourceFile.hasBeenIncrementallyParsed = true;
+
+        var oldText = sourceFile.text;
+        var syntaxCursor = createSyntaxCursor(sourceFile);
+
+        // Make the actual change larger so that we know to reparse anything whose lookahead 
+        // might have intersected the change.
+        var changeRange = extendToAffectedRange(sourceFile, textChangeRange);
+        checkChangeRange(sourceFile, newText, changeRange, aggressiveChecks);
+
+        // Ensure that extending the affected range only moved the start of the change range 
+        // earlier in the file.
+        Debug.assert(changeRange.span.start <= textChangeRange.span.start);
+        Debug.assert(textSpanEnd(changeRange.span) === textSpanEnd(textChangeRange.span));
+        Debug.assert(textSpanEnd(textChangeRangeNewSpan(changeRange)) === textSpanEnd(textChangeRangeNewSpan(textChangeRange)));
+
+        // The is the amount the nodes after the edit range need to be adjusted.  It can be 
+        // positive (if the edit added characters), negative (if the edit deleted characters)
+        // or zero (if this was a pure overwrite with nothing added/removed).
+        var delta = textChangeRangeNewSpan(changeRange).length - changeRange.span.length;
+
+        // If we added or removed characters during the edit, then we need to go and adjust all
+        // the nodes after the edit.  Those nodes may move forward (if we inserted chars) or they 
+        // may move backward (if we deleted chars).
+        //
+        // Doing this helps us out in two ways.  First, it means that any nodes/tokens we want
+        // to reuse are already at the appropriate position in the new text.  That way when we
+        // reuse them, we don't have to figure out if they need to be adjusted.  Second, it makes
+        // it very easy to determine if we can reuse a node.  If the node's position is at where
+        // we are in the text, then we can reuse it.  Otherwise we can't.  If hte node's position
+        // is ahead of us, then we'll need to rescan tokens.  If the node's position is behind
+        // us, then we'll need to skip it or crumble it as appropriate
+        //
+        // We will also adjust the positions of nodes that intersect the change range as well.
+        // By doing this, we ensure that all the positions in the old tree are consistent, not
+        // just the positions of nodes entirely before/after the change range.  By being 
+        // consistent, we can then easily map from positions to nodes in the old tree easily.
+        //
+        // Also, mark any syntax elements that intersect the changed span.  We know, up front,
+        // that we cannot reuse these elements.
+        updateTokenPositionsAndMarkElements(incrementalSourceFile,
+            changeRange.span.start, textSpanEnd(changeRange.span), textSpanEnd(textChangeRangeNewSpan(changeRange)), delta, oldText, newText, aggressiveChecks);
+
+        // Now that we've set up our internal incremental state just proceed and parse the
+        // source file in the normal fashion.  When possible the parser will retrieve and
+        // reuse nodes from the old tree.
+        // 
+        // Note: passing in 'true' for setNodeParents is very important.  When incrementally
+        // parsing, we will be reusing nodes from the old tree, and placing it into new
+        // parents.  If we don't set the parents now, we'll end up with an observably 
+        // inconsistent tree.  Setting the parents on the new tree should be very fast.  We 
+        // will immediately bail out of walking any subtrees when we can see that their parents
+        // are already correct.
+        var result = parseSourceFile(sourceFile.fileName, newText, sourceFile.languageVersion, syntaxCursor, /* setParentNode */ true)  
+
+        return result;
     }
 
     export function isEvalOrArgumentsIdentifier(node: Node): boolean {
@@ -379,6 +855,7 @@ module ts {
     }
 
     interface IncrementalNode extends Node, IncrementalElement {
+        hasBeenIncrementallyParsed: boolean
     }
 
     interface IncrementalNodeArray extends NodeArray<IncrementalNode>, IncrementalElement {
@@ -414,7 +891,7 @@ module ts {
                     // Much of the time the parser will need the very next node in the array that 
                     // we just returned a node from.So just simply check for that case and move 
                     // forward in the array instead of searching for the node again.
-                    if (current && current.end === position && currentArrayIndex < currentArray.length) {
+                    if (current && current.end === position && currentArrayIndex < (currentArray.length - 1)) {
                         currentArrayIndex++;
                         current = currentArray[currentArrayIndex];
                     }
@@ -450,6 +927,7 @@ module ts {
 
             // Recurse into the source file to find the highest node at this position.
             forEachChild(sourceFile, visitNode, visitArray);
+            return;
 
             function visitNode(node: Node) {
                 if (position >= node.pos && position < node.end) {
@@ -496,16 +974,32 @@ module ts {
         }
     }
 
-    export function createSourceFile(filename: string, sourceText: string, languageVersion: ScriptTarget, setParentNodes = false): SourceFile {
-        var parsingContext: ParsingContext;
-        var identifiers: Map<string>;
+    export function createSourceFile(fileName: string, sourceText: string, languageVersion: ScriptTarget, setParentNodes = false): SourceFile {
+        var start = new Date().getTime();
+        var result = parseSourceFile(fileName, sourceText, languageVersion, /*syntaxCursor*/ undefined, setParentNodes);
+
+        parseTime += new Date().getTime() - start;
+        return result;
+    }
+
+    function parseSourceFile(fileName: string, sourceText: string, languageVersion: ScriptTarget, syntaxCursor: SyntaxCursor, setParentNodes = false): SourceFile {
+        var parsingContext: ParsingContext = 0;
+        var identifiers: Map<string> = {};
         var identifierCount = 0;
         var nodeCount = 0;
-        var lineStarts: number[];
-        var syntacticDiagnostics: Diagnostic[];
-        var scanner: Scanner;
         var token: SyntaxKind;
-        var syntaxCursor: SyntaxCursor;
+
+        var sourceFile = <SourceFile>createNode(SyntaxKind.SourceFile, /*pos*/ 0);
+
+        sourceFile.pos = 0;
+        sourceFile.end = sourceText.length;
+        sourceFile.text = sourceText;
+
+        sourceFile.parseDiagnostics = [];
+        sourceFile.bindDiagnostics = [];
+        sourceFile.languageVersion = languageVersion;
+        sourceFile.fileName = normalizePath(fileName);
+        sourceFile.flags = fileExtensionIs(sourceFile.fileName, ".d.ts") ? NodeFlags.DeclarationFile : 0;
 
         // Flags that dictate what parsing context we're in.  For example:
         // Whether or not we are in strict parsing mode.  All that changes in strict parsing mode is
@@ -553,7 +1047,7 @@ module ts {
         // Note: it should not be necessary to save/restore these flags during speculative/lookahead
         // parsing.  These context flags are naturally stored and restored through normal recursive
         // descent parsing and unwinding.
-        var contextFlags: ParserContextFlags;
+        var contextFlags: ParserContextFlags = 0;
 
         // Whether or not we've had a parse error since creating the last AST node.  If we have 
         // encountered an error, it will be stored on the next AST node we create.  Parse errors
@@ -582,406 +1076,30 @@ module ts {
         //
         // Note: any errors at the end of the file that do not precede a regular node, should get
         // attached to the EOF token.
-        var parseErrorBeforeNextFinishedNode: boolean;
+        var parseErrorBeforeNextFinishedNode: boolean = false;
 
-        var sourceFile: SourceFile;
+        // Create and prime the scanner before parsing the source elements.
+        var scanner = createScanner(languageVersion, /*skipTrivia*/ true, sourceText, scanError);
+        token = nextToken();
 
-        return parseSourceFile(sourceText, setParentNodes);
+        processReferenceComments(sourceFile);
 
-        function parseSourceFile(text: string, setParentNodes: boolean): SourceFile {
-            // Set our initial state before parsing.
-            sourceText = text;
-            parsingContext = 0;
-            identifiers = {};
-            lineStarts = undefined;
-            syntacticDiagnostics = undefined;
-            contextFlags = 0;
-            parseErrorBeforeNextFinishedNode = false;
+        sourceFile.statements = parseList(ParsingContext.SourceElements, /*checkForStrictMode*/ true, parseSourceElement);
+        Debug.assert(token === SyntaxKind.EndOfFileToken);
+        sourceFile.endOfFileToken = parseTokenNode();
 
-            sourceFile = <SourceFile>createNode(SyntaxKind.SourceFile, 0);
-            sourceFile.referenceDiagnostics = [];
-            sourceFile.parseDiagnostics = [];
-            sourceFile.semanticDiagnostics = [];
+        setExternalModuleIndicator(sourceFile);
 
-            // Create and prime the scanner before parsing the source elements.
-            scanner = createScanner(languageVersion, /*skipTrivia*/ true, sourceText, scanError);
-            token = nextToken();
+        sourceFile.nodeCount = nodeCount;
+        sourceFile.identifierCount = identifierCount;
+        sourceFile.identifiers = identifiers;
 
-            sourceFile.flags = fileExtensionIs(filename, ".d.ts") ? NodeFlags.DeclarationFile : 0;
-            sourceFile.end = sourceText.length;
-            sourceFile.filename = normalizePath(filename);
-            sourceFile.text = sourceText;
-
-            sourceFile.getLineAndCharacterFromPosition = getLineAndCharacterFromSourcePosition;
-            sourceFile.getPositionFromLineAndCharacter = getPositionFromSourceLineAndCharacter;
-            sourceFile.getLineStarts = getLineStarts;
-            sourceFile.getSyntacticDiagnostics = getSyntacticDiagnostics;
-            sourceFile.update = update;
-
-            processReferenceComments(sourceFile);
-
-            sourceFile.statements = parseList(ParsingContext.SourceElements, /*checkForStrictMode*/ true, parseSourceElement);
-            Debug.assert(token === SyntaxKind.EndOfFileToken);
-            sourceFile.endOfFileToken = parseTokenNode();
-
-            setExternalModuleIndicator(sourceFile);
-
-            sourceFile.nodeCount = nodeCount;
-            sourceFile.identifierCount = identifierCount;
-            sourceFile.languageVersion = languageVersion;
-            sourceFile.identifiers = identifiers;
-
-            if (setParentNodes) {
-                fixupParentReferences(sourceFile);
-            }
-
-            return sourceFile;
+        if (setParentNodes) {
+            fixupParentReferences(sourceFile);
         }
 
-        function update(newText: string, textChangeRange: TextChangeRange) {
-            if (textChangeRangeIsUnchanged(textChangeRange)) {
-                // if the text didn't change, then we can just return our current source file as-is.
-                return sourceFile;
-            }
-
-            if (sourceFile.statements.length === 0) {
-                // If we don't have any statements in the current source file, then there's no real
-                // way to incrementally parse.  So just do a full parse instead.
-                return parseSourceFile(newText, /*setNodeParents*/ true);
-            }
-
-            syntaxCursor = createSyntaxCursor(sourceFile);
-
-            // Make the actual change larger so that we know to reparse anything whose lookahead 
-            // might have intersected the change.
-            var changeRange = extendToAffectedRange(textChangeRange);
-
-            // The is the amount the nodes after the edit range need to be adjusted.  It can be 
-            // positive (if the edit added characters), negative (if the edit deleted characters)
-            // or zero (if this was a pure overwrite with nothing added/removed).
-            var delta = textChangeRangeNewSpan(changeRange).length - changeRange.span.length;
-
-            // If we added or removed characters during the edit, then we need to go and adjust all
-            // the nodes after the edit.  Those nodes may move forward down (if we inserted chars)
-            // or they may move backward (if we deleted chars).
-            //
-            // Doing this helps us out in two ways.  First, it means that any nodes/tokens we want
-            // to reuse are already at the appropriate position in the new text.  That way when we
-            // reuse them, we don't have to figure out if they need to be adjusted.  Second, it makes
-            // it very easy to determine if we can reuse a node.  If the node's position is at where
-            // we are in the text, then we can reuse it.  Otherwise we can't.  If hte node's position
-            // is ahead of us, then we'll need to rescan tokens.  If the node's position is behind
-            // us, then we'll need to skip it or crumble it as appropriate
-            //
-            // We will also adjust the positions of nodes that intersect the change range as well.
-            // By doing this, we ensure that all the positions in the old tree are consistent, not
-            // just the positions of nodes entirely before/after the change range.  By being 
-            // consistent, we can then easily map from positions to nodes in the old tree easily.
-            //
-            // Also, mark any syntax elements that intersect the changed span.  We know, up front,
-            // that we cannot reuse these elements.
-            updateTokenPositionsAndMarkElements(<IncrementalNode><Node>sourceFile,
-                changeRange.span.start, textSpanEnd(changeRange.span), textSpanEnd(textChangeRangeNewSpan(changeRange)), delta);
-
-            // Now that we've set up our internal incremental state just proceed and parse the
-            // source file in the normal fashion.  When possible the parser will retrieve and
-            // reuse nodes from the old tree.
-            // 
-            // Note: passing in 'true' for setNodeParents is very important.  When incrementally
-            // parsing, we will be reusing nodes from the old tree, and placing it into new
-            // parents.  If we don't set the parents now, we'll end up with an observably 
-            // inconsistent tree.  Setting the parents on the new tree should be very fast.  We 
-            // will immediately bail out of walking any subtrees when we can see that their parents
-            // are already correct.
-            var result = parseSourceFile(newText, /*setNodeParents*/ true);
-
-            // Clear out the syntax cursor so it doesn't keep anything alive longer than it should.
-            syntaxCursor = undefined;
-
-            return result;
-        }
-
-        function updateTokenPositionsAndMarkElements(node: IncrementalNode, changeStart: number, changeRangeOldEnd: number, changeRangeNewEnd: number, delta: number): void {
-            visitNode(node);
-
-            function visitNode(child: IncrementalNode) {
-                if (child.pos > changeRangeOldEnd) {
-                    // Node is entirely past the change range.  We need to move both its pos and 
-                    // end, forward or backward appropriately.
-                    moveElementEntirelyPastChangeRange(child, delta);
-                    return;
-                }
-
-                // Check if the element intersects the change range.  If it does, then it is not
-                // reusable.  Also, we'll need to recurse to see what constituent portions we may
-                // be able to use.
-                var fullEnd = child.end;
-                if (fullEnd >= changeStart) {
-                    child.intersectsChange = true;
-
-                    // Adjust the pos or end (or both) of the intersecting element accordingly.
-                    adjustIntersectingElement(child, changeStart, changeRangeOldEnd, changeRangeNewEnd, delta);
-                    forEachChild(child, visitNode, visitArray);
-                    return;
-                }
-
-                // Otherwise, the node is entirely before the change range.  No need to do anything with it.
-            }
-
-            function visitArray(array: IncrementalNodeArray) {
-                if (array.pos > changeRangeOldEnd) {
-                    // Array is entirely after the change range.  We need to move it, and move any of
-                    // its children.
-                    moveElementEntirelyPastChangeRange(array, delta);
-                }
-                else {
-                    // Check if the element intersects the change range.  If it does, then it is not
-                    // reusable.  Also, we'll need to recurse to see what constituent portions we may
-                    // be able to use.
-                    var fullEnd = array.end;
-                    if (fullEnd >= changeStart) {
-                        array.intersectsChange = true;
-
-                        // Adjust the pos or end (or both) of the intersecting array accordingly.
-                        adjustIntersectingElement(array, changeStart, changeRangeOldEnd, changeRangeNewEnd, delta);
-                        for (var i = 0, n = array.length; i < n; i++) {
-                            visitNode(array[i]);
-                        }
-                    }
-                    // else {
-                    // Otherwise, the array is entirely before the change range.  No need to do anything with it.
-                    // }
-                }
-            }
-        }
-
-        function adjustIntersectingElement(element: IncrementalElement, changeStart: number, changeRangeOldEnd: number, changeRangeNewEnd: number, delta: number) {
-            Debug.assert(element.end >= changeStart, "Adjusting an element that was entirely before the change range");
-            Debug.assert(element.pos <= changeRangeOldEnd, "Adjusting an element that was entirely after the change range");
-
-            // We have an element that intersects the change range in some way.  It may have its
-            // start, or its end (or both) in the changed range.  We want to adjust any part
-            // that intersects such that the final tree is in a consistent state.  i.e. all
-            // chlidren have spans within the span of their parent, and all siblings are ordered
-            // properly.
-
-            // We may need to update both the 'pos' and the 'end' of the element.
-
-            // If the 'pos' is before the start of the change, then we don't need to touch it.  
-            // If it isn't, then the 'pos' must be inside the change.  How we update it will 
-            // depend if delta is  positive or negative.  If delta is positive then we have 
-            // something like:
-            //
-            //  -------------------AAA-----------------
-            //  -------------------BBBCCCCCCC-----------------
-            //
-            // In this case, we consider any node that started in the change range to still be
-            // starting at the same position.
-            //
-            // however, if the delta is negative, then we instead have something like this:
-            //
-            //  -------------------XXXYYYYYYY-----------------
-            //  -------------------ZZZ-----------------
-            //
-            // In this case, any element that started in the 'X' range will keep its position.  
-            // However any element htat started after that will have their pos adjusted to be
-            // at the end of the new range.  i.e. any node that started in the 'Y' range will
-            // be adjusted to have their start at the end of the 'Z' range.
-            //
-            // The element will keep its position if possible.  Or Move backward to the new-end
-            // if it's in the 'Y' range.
-            element.pos = Math.min(element.pos, changeRangeNewEnd);
-
-            // If the 'end' is after the change range, then we always adjust it by the delta
-            // amount.  However, if the end is in the change range, then how we adjust it 
-            // will depend on if delta is  positive or negative.  If delta is positive then we
-            // have something like:
-            //
-            //  -------------------AAA-----------------
-            //  -------------------BBBCCCCCCC-----------------
-            //
-            // In this case, we consider any node that ended inside the change range to keep its
-            // end position.
-            //
-            // however, if the delta is negative, then we instead have something like this:
-            //
-            //  -------------------XXXYYYYYYY-----------------
-            //  -------------------ZZZ-----------------
-            //
-            // In this case, any element that ended in the 'X' range will keep its position.  
-            // However any element htat ended after that will have their pos adjusted to be
-            // at the end of the new range.  i.e. any node that ended in the 'Y' range will
-            // be adjusted to have their end at the end of the 'Z' range.
-            if (element.end >= changeRangeOldEnd) {
-                // Element ends after the change range.  Always adjust the end pos.
-                element.end += delta;
-            }
-            else {
-                // Element ends in the change range.  The element will keep its position if 
-                // possible. Or Move backward to the new-end if it's in the 'Y' range.
-                element.end = Math.min(element.end, changeRangeNewEnd);
-            }
-
-            Debug.assert(element.pos <= element.end);
-            if (element.parent) {
-                Debug.assert(element.pos >= element.parent.pos);
-                Debug.assert(element.end <= element.parent.end);
-            }
-        }
-
-        function moveElementEntirelyPastChangeRange(element: IncrementalElement, delta: number) {
-            if (element.length) {
-                visitArray(<IncrementalNodeArray>element);
-            }
-            else {
-                visitNode(<IncrementalNode>element);
-            }
-
-            function visitNode(node: IncrementalNode) {
-                // Ditch any existing LS children we may have created.  This way we can avoid 
-                // moving them forward.
-                node._children = undefined;
-                node.pos += delta;
-                node.end += delta;
-
-                forEachChild(node, visitNode, visitArray);
-            }
-
-            function visitArray(array: IncrementalNodeArray) {
-                array.pos += delta;
-                array.end += delta;
-
-                for (var i = 0, n = array.length; i < n; i++) {
-                    visitNode(array[i]);
-                }
-            }
-        }
-
-        function extendToAffectedRange(changeRange: TextChangeRange): TextChangeRange {
-            // Consider the following code:
-            //      void foo() { /; }
-            //
-            // If the text changes with an insertion of / just before the semicolon then we end up with:
-            //      void foo() { //; }
-            //
-            // If we were to just use the changeRange a is, then we would not rescan the { token 
-            // (as it does not intersect the actual original change range).  Because an edit may
-            // change the token touching it, we actually need to look back *at least* one token so
-            // that the prior token sees that change.  
-            var maxLookahead = 1;
-
-            var start = changeRange.span.start;
-
-            // the first iteration aligns us with the change start. subsequent iteration move us to
-            // the left by maxLookahead tokens.  We only need to do this as long as we're not at the
-            // start of the tree.
-            for (var i = 0; start > 0 && i <= maxLookahead; i++) {
-                var nearestNode = findNearestNodeStartingBeforeOrAtPosition(start);
-                var position = nearestNode.pos;
-
-                start = Math.max(0, position - 1);
-            }
-
-            var finalSpan = createTextSpanFromBounds(start, textSpanEnd(changeRange.span));
-            var finalLength = changeRange.newLength + (changeRange.span.start - start);
-
-            return createTextChangeRange(finalSpan, finalLength);
-        }
-
-        function findNearestNodeStartingBeforeOrAtPosition(position: number): Node {
-            var bestResult: Node = sourceFile;
-            var lastNodeEntirelyBeforePosition: Node;
-
-            forEachChild(sourceFile, visit);
-
-            if (lastNodeEntirelyBeforePosition) {
-                var lastChildOfLastEntireNodeBeforePosition = getLastChild(lastNodeEntirelyBeforePosition);
-                if (lastChildOfLastEntireNodeBeforePosition.pos > bestResult.pos) {
-                    bestResult = lastChildOfLastEntireNodeBeforePosition;
-                }
-            }
-
-            return bestResult;
-
-            function getLastChild(node: Node): Node {
-                while (true) {
-                    var lastChild = getLastChildWorker(node);
-                    if (lastChild) {
-                        node = lastChild;
-                    }
-                    else {
-                        return node;
-                    }
-                }
-            }
-
-            function getLastChildWorker(node: Node): Node {
-                var last:Node = undefined;
-                forEachChild(node, child => {
-                    if (nodeIsPresent(child)) {
-                        last = child;
-                    }
-                });
-                return last;
-            }
-
-            function visit(child: Node) {
-                if (nodeIsMissing(child)) {
-                    // Missing nodes are effectively invisible to us.  We never even consider them
-                    // When trying to find the nearest node before us.
-                    return;
-                }
-
-                // If the child intersects this position, then this node is currently the nearest 
-                // node that starts before the position.
-                if (child.pos <= position) {
-                    if (child.pos >= bestResult.pos) {
-                        // This node starts before the position, and is closer to the position than
-                        // the previous best node we found.  It is now the new best node.
-                        bestResult = child;
-                    }
-
-                    // Now, the node may overlap the position, or it may end entirely before the
-                    // position.  If it overlaps with the position, then either it, or one of its
-                    // children must be the nearest node before the position.  So we can just 
-                    // recurse into this child to see if we can find something better.
-                    if (position < child.end) {
-                        // The nearest node is either this child, or one of the children inside
-                        // of it.  We've already marked this child as the best so far.  Recurse
-                        // in case one of the children is better.
-                        forEachChild(child, visit);
-
-                        // Once we look at the children of this node, then there's no need to
-                        // continue any further.
-                        return true;
-                    }
-                    else {
-                        Debug.assert(child.end <= position);
-                        // The child ends entirely before this position.  Say you have the following
-                        // (where $ is the position)
-                        // 
-                        //      <complex expr 1> ? <complex expr 2> $ : <...> <...> 
-                        //
-                        // We would want to find the nearest preceding node in "complex expr 2". 
-                        // To support that, we keep track of this node, and once we're done searching
-                        // for a best node, we recurse down this node to see if we can find a good
-                        // result in it.
-                        //
-                        // This approach allows us to quickly skip over nodes that are entirely 
-                        // before the position, while still allowing us to find any nodes in the
-                        // last one that might be what we want.
-                        lastNodeEntirelyBeforePosition = child;
-                    }
-                }
-                else {
-                    Debug.assert(child.pos > position);
-                    // We're now at a node that is entirely past the position we're searching for.
-                    // This node (and all following nodes) could never contribute to the result,
-                    // so just skip them by returning 'true' here.
-                    return true;
-                }
-            }
-        }
+        syntaxCursor = undefined;
+        return sourceFile;
 
         function setContextFlag(val: Boolean, flag: ParserContextFlags) {
             if (val) {
@@ -1070,18 +1188,6 @@ module ts {
 
         function inDisallowInContext() {
             return (contextFlags & ParserContextFlags.DisallowIn) !== 0;
-        }
-
-        function getLineStarts(): number[] {
-            return lineStarts || (lineStarts = computeLineStarts(sourceText));
-        }
-
-        function getLineAndCharacterFromSourcePosition(position: number) {
-            return getLineAndCharacterOfPosition(getLineStarts(), position);
-        }
-
-        function getPositionFromSourceLineAndCharacter(line: number, character: number): number {
-            return getPositionFromLineAndCharacter(getLineStarts(), line, character);
         }
 
         function parseErrorAtCurrentToken(message: DiagnosticMessage, arg0?: any): void {
@@ -1224,11 +1330,20 @@ module ts {
 
         function parseOptionalToken(t: SyntaxKind): Node {
             if (token === t) {
-                var node = createNode(t);
-                nextToken();
-                return finishNode(node);
+                return parseTokenNode();
             }
             return undefined;
+        }
+
+        function parseExpectedToken(t: SyntaxKind, reportAtCurrentPosition: boolean, diagnosticMessage: DiagnosticMessage, arg0?: any): Node {
+            return parseOptionalToken(t) ||
+                createMissingNode(t, reportAtCurrentPosition, diagnosticMessage, arg0);
+        }
+
+        function parseTokenNode<T extends Node>(): T {
+            var node = <T>createNode(token);
+            nextToken();
+            return finishNode(node);
         }
 
         function canParseSemicolon() {
@@ -1389,7 +1504,16 @@ module ts {
                 // 'const' is only a modifier if followed by 'enum'.
                 return nextToken() === SyntaxKind.EnumKeyword;
             }
-
+            if (token === SyntaxKind.ExportKeyword) {
+                nextToken();
+                if (token === SyntaxKind.DefaultKeyword) {
+                    return lookAhead(nextTokenIsClassOrFunction);
+                }
+                return token !== SyntaxKind.AsteriskToken && token !== SyntaxKind.OpenBraceToken && canFollowModifier();
+            }
+            if (token === SyntaxKind.DefaultKeyword) {
+                return nextTokenIsClassOrFunction();
+            }
             nextToken();
             return canFollowModifier();
         }
@@ -1399,6 +1523,11 @@ module ts {
                 || token === SyntaxKind.OpenBraceToken
                 || token === SyntaxKind.AsteriskToken
                 || isLiteralPropertyName();
+        }
+
+        function nextTokenIsClassOrFunction(): boolean {
+            nextToken();
+            return token === SyntaxKind.ClassKeyword || token === SyntaxKind.FunctionKeyword;
         }
 
         // True if positioned at the start of a list element
@@ -1440,7 +1569,6 @@ module ts {
                 case ParsingContext.TypeParameters:
                     return isIdentifier();
                 case ParsingContext.ArgumentExpressions:
-                    return token === SyntaxKind.CommaToken || isStartOfExpression();
                 case ParsingContext.ArrayLiteralMembers:
                     return token === SyntaxKind.CommaToken || token === SyntaxKind.DotDotDotToken || isStartOfExpression();
                 case ParsingContext.Parameters:
@@ -1450,6 +1578,8 @@ module ts {
                     return token === SyntaxKind.CommaToken || isStartOfType();
                 case ParsingContext.HeritageClauses:
                     return isHeritageClause();
+                case ParsingContext.ImportOrExportSpecifiers:
+                    return isIdentifierOrKeyword();
             }
 
             Debug.fail("Non-exhaustive case in 'isListElement'.");
@@ -1486,6 +1616,7 @@ module ts {
                 case ParsingContext.EnumMembers:
                 case ParsingContext.ObjectLiteralMembers:
                 case ParsingContext.ObjectBindingElements:
+                case ParsingContext.ImportOrExportSpecifiers:
                     return token === SyntaxKind.CloseBraceToken;
                 case ParsingContext.SwitchClauseStatements:
                     return token === SyntaxKind.CloseBraceToken || token === SyntaxKind.CaseKeyword || token === SyntaxKind.DefaultKeyword;
@@ -1511,7 +1642,6 @@ module ts {
                     return token === SyntaxKind.GreaterThanToken || token === SyntaxKind.OpenParenToken;
                 case ParsingContext.HeritageClauses:
                     return token === SyntaxKind.OpenBraceToken || token === SyntaxKind.CloseBraceToken;
-
             }
         }
 
@@ -1523,8 +1653,8 @@ module ts {
             }
 
             // in the case where we're parsing the variable declarator of a 'for-in' statement, we 
-            // are done if we see an 'in' keyword in front of us.
-            if (token === SyntaxKind.InKeyword) {
+            // are done if we see an 'in' keyword in front of us. Same with for-of
+            if (isInOrOfKeyword(token)) {
                 return true;
             }
 
@@ -1593,8 +1723,8 @@ module ts {
             return result;
         }
 
-        function parseListElement<T extends Node>(kind: ParsingContext, parseElement: () => T): T {
-            var node = currentNode(kind);
+        function parseListElement<T extends Node>(parsingContext: ParsingContext, parseElement: () => T): T {
+            var node = currentNode(parsingContext);
             if (node) {
                 return <T>consumeNode(node);
             }
@@ -1746,34 +1876,17 @@ module ts {
             if (node) {
                 switch (node.kind) {
                     case SyntaxKind.ImportDeclaration:
+                    case SyntaxKind.ImportEqualsDeclaration:
+                    case SyntaxKind.ExportDeclaration:
                     case SyntaxKind.ExportAssignment:
                     case SyntaxKind.ClassDeclaration:
                     case SyntaxKind.InterfaceDeclaration:
                     case SyntaxKind.ModuleDeclaration:
                     case SyntaxKind.EnumDeclaration:
-
-                    // Keep in sync with isStatement:
-                    case SyntaxKind.FunctionDeclaration:
-                    case SyntaxKind.VariableStatement:
-                    case SyntaxKind.Block:
-                    case SyntaxKind.IfStatement:
-                    case SyntaxKind.ExpressionStatement:
-                    case SyntaxKind.ThrowStatement:
-                    case SyntaxKind.ReturnStatement:
-                    case SyntaxKind.SwitchStatement:
-                    case SyntaxKind.BreakStatement:
-                    case SyntaxKind.ContinueStatement:
-                    case SyntaxKind.ForInStatement:
-                    case SyntaxKind.ForStatement:
-                    case SyntaxKind.WhileStatement:
-                    case SyntaxKind.WithStatement:
-                    case SyntaxKind.EmptyStatement:
-                    case SyntaxKind.TryStatement:
-                    case SyntaxKind.LabeledStatement:
-                    case SyntaxKind.DoStatement:
-                    case SyntaxKind.DebuggerStatement:
                         return true;
                 }
+
+                return isReusableStatement(node);
             }
 
             return false;
@@ -1821,6 +1934,7 @@ module ts {
                     case SyntaxKind.BreakStatement:
                     case SyntaxKind.ContinueStatement:
                     case SyntaxKind.ForInStatement:
+                    case SyntaxKind.ForOfStatement:
                     case SyntaxKind.ForStatement:
                     case SyntaxKind.WhileStatement:
                     case SyntaxKind.WithStatement:
@@ -1879,9 +1993,13 @@ module ts {
         }
 
         function isReusableParameter(node: Node) {
-            // TODO: this most likely needs the same initializer check that 
-            // isReusableVariableDeclaration has.
-            return node.kind === SyntaxKind.Parameter;
+            if (node.kind !== SyntaxKind.Parameter) {
+                return false;
+            }
+
+            // See the comment in isReusableVariableDeclaration for why we do this.
+            var parameter = <ParameterDeclaration>node;
+            return parameter.initializer === undefined;
         }
 
         // Returns true if we should abort parsing.
@@ -1896,7 +2014,7 @@ module ts {
         }
 
         // Parses a comma-delimited list of elements
-        function parseDelimitedList<T extends Node>(kind: ParsingContext, parseElement: () => T): NodeArray<T> {
+        function parseDelimitedList<T extends Node>(kind: ParsingContext, parseElement: () => T, considerSemicolonAsDelimeter?: boolean): NodeArray<T> {
             var saveParsingContext = parsingContext;
             parsingContext |= 1 << kind;
             var result = <NodeArray<T>>[];
@@ -1910,11 +2028,24 @@ module ts {
                     if (parseOptional(SyntaxKind.CommaToken)) {
                         continue;
                     }
+
                     commaStart = -1; // Back to the state where the last token was not a comma
                     if (isListTerminator(kind)) {
                         break;
                     }
+
+                    // We didn't get a comma, and the list wasn't terminated, explicitly parse
+                    // out a comma so we give a good error message.
                     parseExpected(SyntaxKind.CommaToken);
+                    
+                    // If the token was a semicolon, and the caller allows that, then skip it and
+                    // continue.  This ensures we get back on track and don't result in tons of
+                    // parse errors.  For example, this can happen when people do things like use 
+                    // a semicolon to delimit object literal members.   Note: we'll have already
+                    // reported an error when we called parseExpected above.
+                    if (considerSemicolonAsDelimeter && token === SyntaxKind.SemicolonToken && !scanner.hasPrecedingLineBreak()) {
+                        nextToken();
+                    }
                     continue;
                 }
 
@@ -2006,14 +2137,6 @@ module ts {
             return allowIdentifierNames ? parseIdentifierName() : parseIdentifier();
         }
 
-
-
-        function parseTokenNode<T extends Node>(): T {
-            var node = <T>createNode(token);
-            nextToken();
-            return finishNode(node);
-        }
-
         function parseTemplateExpression(): TemplateExpression {
             var template = <TemplateExpression>createNode(SyntaxKind.TemplateExpression);
 
@@ -2045,8 +2168,7 @@ module ts {
                 literal = parseLiteralNode();
             }
             else {
-                literal = <LiteralExpression>createMissingNode(
-                    SyntaxKind.TemplateTail, /*reportAtCurrentPosition:*/ false, Diagnostics._0_expected, tokenToString(SyntaxKind.CloseBraceToken));
+                literal = <LiteralExpression>parseExpectedToken(SyntaxKind.TemplateTail, /*reportAtCurrentPosition:*/ false, Diagnostics._0_expected, tokenToString(SyntaxKind.CloseBraceToken));
             }
 
             span.literal = literal;
@@ -2058,6 +2180,10 @@ module ts {
             var text = scanner.getTokenValue();
             node.text = internName ? internIdentifier(text) : text;
 
+            if (scanner.hasExtendedUnicodeEscape()) {
+                node.hasExtendedUnicodeEscape = true;
+            }
+            
             if (scanner.isUnterminated()) {
                 node.isUnterminated = true;
             }
@@ -2260,17 +2386,14 @@ module ts {
         }
 
         function parseTypeMemberSemicolon() {
-            // Try to parse out an explicit or implicit (ASI) semicolon for a type member.  If we
-            // don't have one, then an appropriate error will be reported.
-            if (parseSemicolon()) {
+            // We allow type members to be separated by commas or (possibly ASI) semicolons. 
+            // First check if it was a comma.  If so, we're done with the member.
+            if (parseOptional(SyntaxKind.CommaToken)) {
                 return;
             }
 
-            // If we don't have a semicolon, then the user may have written a comma instead 
-            // accidently (pretty easy to do since commas are so prevalent as list separators). So
-            // just consume the comma and keep going.  Note: we'll have already reported the error
-            // about the missing semicolon above.
-            parseOptional(SyntaxKind.CommaToken);
+            // Didn't have a comma.  We must have a (possible ASI) semicolon.
+            parseSemicolon();
         }
 
         function parseSignatureMember(kind: SyntaxKind): SignatureDeclaration {
@@ -2520,6 +2643,7 @@ module ts {
                 case SyntaxKind.StringKeyword:
                 case SyntaxKind.NumberKeyword:
                 case SyntaxKind.BooleanKeyword:
+                case SyntaxKind.SymbolKeyword:
                     // If these are followed by a dot, then parse these out as a dotted type reference instead.
                     var node = tryParse(parseKeywordAndNoDot);
                     return node || parseTypeReference();
@@ -2544,6 +2668,7 @@ module ts {
                 case SyntaxKind.StringKeyword:
                 case SyntaxKind.NumberKeyword:
                 case SyntaxKind.BooleanKeyword:
+                case SyntaxKind.SymbolKeyword:
                 case SyntaxKind.VoidKeyword:
                 case SyntaxKind.TypeOfKeyword:
                 case SyntaxKind.OpenBraceToken:
@@ -2721,8 +2846,9 @@ module ts {
             //      Expression[in] , AssignmentExpression[in]
 
             var expr = parseAssignmentExpressionOrHigher();
-            while (parseOptional(SyntaxKind.CommaToken)) {
-                expr = makeBinaryExpression(expr, SyntaxKind.CommaToken, parseAssignmentExpressionOrHigher());
+            var operatorToken: Node;
+            while ((operatorToken = parseOptionalToken(SyntaxKind.CommaToken))) {
+                expr = makeBinaryExpression(expr, operatorToken, parseAssignmentExpressionOrHigher());
             }
             return expr;
         }
@@ -2801,9 +2927,7 @@ module ts {
             // Note: we call reScanGreaterToken so that we get an appropriately merged token
             // for cases like > > =  becoming >>=
             if (isLeftHandSideExpression(expr) && isAssignmentOperator(reScanGreaterToken())) {
-                var operator = token;
-                nextToken();
-                return makeBinaryExpression(expr, operator, parseAssignmentExpressionOrHigher());
+                return makeBinaryExpression(expr, parseTokenNode(), parseAssignmentExpressionOrHigher());
             }
 
             // It wasn't an assignment or a lambda.  This is a conditional expression:
@@ -3067,7 +3191,8 @@ module ts {
 
         function parseConditionalExpressionRest(leftOperand: Expression): Expression {
             // Note: we are passed in an expression which was produced from parseBinaryExpressionOrHigher.
-            if (!parseOptional(SyntaxKind.QuestionToken)) {
+            var questionToken = parseOptionalToken(SyntaxKind.QuestionToken);
+            if (!questionToken) {
                 return leftOperand;
             }
 
@@ -3075,8 +3200,10 @@ module ts {
             // we do not that for the 'whenFalse' part.  
             var node = <ConditionalExpression>createNode(SyntaxKind.ConditionalExpression, leftOperand.pos);
             node.condition = leftOperand;
+            node.questionToken = questionToken;
             node.whenTrue = allowInAnd(parseAssignmentExpressionOrHigher);
-            parseExpected(SyntaxKind.ColonToken);
+            node.colonToken = parseExpectedToken(SyntaxKind.ColonToken, /*reportAtCurrentPosition:*/ false,
+                Diagnostics._0_expected, tokenToString(SyntaxKind.ColonToken));
             node.whenFalse = parseAssignmentExpressionOrHigher();
             return finishNode(node);
         }
@@ -3084,6 +3211,10 @@ module ts {
         function parseBinaryExpressionOrHigher(precedence: number): Expression {
             var leftOperand = parseUnaryExpressionOrHigher();
             return parseBinaryExpressionRest(precedence, leftOperand);
+        }
+
+        function isInOrOfKeyword(t: SyntaxKind) {
+            return t === SyntaxKind.InKeyword || t === SyntaxKind.OfKeyword;
         }
 
         function parseBinaryExpressionRest(precedence: number, leftOperand: Expression): Expression {
@@ -3103,9 +3234,7 @@ module ts {
                     break;
                 }
 
-                var operator = token;
-                nextToken();
-                leftOperand = makeBinaryExpression(leftOperand, operator, parseBinaryExpressionOrHigher(newPrecedence));
+                leftOperand = makeBinaryExpression(leftOperand, parseTokenNode(), parseBinaryExpressionOrHigher(newPrecedence));
             }
 
             return leftOperand;
@@ -3161,10 +3290,10 @@ module ts {
             return -1;
         }
 
-        function makeBinaryExpression(left: Expression, operator: SyntaxKind, right: Expression): BinaryExpression {
+        function makeBinaryExpression(left: Expression, operatorToken: Node, right: Expression): BinaryExpression {
             var node = <BinaryExpression>createNode(SyntaxKind.BinaryExpression, left.pos);
             node.left = left;
-            node.operator = operator;
+            node.operatorToken = operatorToken;
             node.right = right;
             return finishNode(node);
         }
@@ -3337,7 +3466,7 @@ module ts {
             // If it wasn't then just try to parse out a '.' and report an error.
             var node = <PropertyAccessExpression>createNode(SyntaxKind.PropertyAccessExpression, expression.pos);
             node.expression = expression;
-            parseExpected(SyntaxKind.DotToken, Diagnostics.super_must_be_followed_by_an_argument_list_or_member_access);
+            node.dotToken = parseExpectedToken(SyntaxKind.DotToken, /*reportAtCurrentPosition:*/ false, Diagnostics.super_must_be_followed_by_an_argument_list_or_member_access);
             node.name = parseRightSideOfDot(/*allowIdentifierNames:*/ true);
             return finishNode(node);
         }
@@ -3353,10 +3482,11 @@ module ts {
 
         function parseMemberExpressionRest(expression: LeftHandSideExpression): MemberExpression {
             while (true) {
-                var dotOrBracketStart = scanner.getTokenPos();
-                if (parseOptional(SyntaxKind.DotToken)) {
+                var dotToken = parseOptionalToken(SyntaxKind.DotToken);
+                if (dotToken) {
                     var propertyAccess = <PropertyAccessExpression>createNode(SyntaxKind.PropertyAccessExpression, expression.pos);
                     propertyAccess.expression = expression;
+                    propertyAccess.dotToken = dotToken;
                     propertyAccess.name = parseRightSideOfDot(/*allowIdentifierNames:*/ true);
                     expression = finishNode(propertyAccess);
                     continue;
@@ -3531,12 +3661,6 @@ module ts {
             return finishNode(node);
         }
 
-        function parseAssignmentExpressionOrOmittedExpression(): Expression {
-            return token === SyntaxKind.CommaToken
-                ? <Expression>createNode(SyntaxKind.OmittedExpression)
-                : parseAssignmentExpressionOrHigher();
-        }
-
         function parseSpreadElement(): Expression {
             var node = <SpreadElementExpression>createNode(SyntaxKind.SpreadElementExpression);
             parseExpected(SyntaxKind.DotDotDotToken);
@@ -3544,19 +3668,21 @@ module ts {
             return finishNode(node);
         }
 
-        function parseArrayLiteralElement(): Expression {
-            return token === SyntaxKind.DotDotDotToken ? parseSpreadElement() : parseAssignmentExpressionOrOmittedExpression();
+        function parseArgumentOrArrayLiteralElement(): Expression {
+            return token === SyntaxKind.DotDotDotToken ? parseSpreadElement() :
+                token === SyntaxKind.CommaToken ? <Expression>createNode(SyntaxKind.OmittedExpression) :
+                parseAssignmentExpressionOrHigher();
         }
 
         function parseArgumentExpression(): Expression {
-            return allowInAnd(parseAssignmentExpressionOrOmittedExpression);
+            return allowInAnd(parseArgumentOrArrayLiteralElement);
         }
 
         function parseArrayLiteralExpression(): ArrayLiteralExpression {
             var node = <ArrayLiteralExpression>createNode(SyntaxKind.ArrayLiteralExpression);
             parseExpected(SyntaxKind.OpenBracketToken);
             if (scanner.hasPrecedingLineBreak()) node.flags |= NodeFlags.MultiLine;
-            node.elements = parseDelimitedList(ParsingContext.ArrayLiteralMembers, parseArrayLiteralElement);
+            node.elements = parseDelimitedList(ParsingContext.ArrayLiteralMembers, parseArgumentOrArrayLiteralElement);
             parseExpected(SyntaxKind.CloseBracketToken);
             return finishNode(node);
         }
@@ -3616,7 +3742,7 @@ module ts {
                 node.flags |= NodeFlags.MultiLine;
             }
 
-            node.properties = parseDelimitedList(ParsingContext.ObjectLiteralMembers, parseObjectLiteralElement);
+            node.properties = parseDelimitedList(ParsingContext.ObjectLiteralMembers, parseObjectLiteralElement, /*considerSemicolonAsDelimeter:*/ true);
             parseExpected(SyntaxKind.CloseBraceToken);
             return finishNode(node);
         }
@@ -3719,7 +3845,7 @@ module ts {
             return finishNode(node);
         }
 
-        function parseForOrForInStatement(): Statement {
+        function parseForOrForInOrForOfStatement(): Statement {
             var pos = getNodePos();
             parseExpected(SyntaxKind.ForKeyword);
             parseExpected(SyntaxKind.OpenParenToken);
@@ -3727,21 +3853,27 @@ module ts {
             var initializer: VariableDeclarationList | Expression = undefined;
             if (token !== SyntaxKind.SemicolonToken) {
                 if (token === SyntaxKind.VarKeyword || token === SyntaxKind.LetKeyword || token === SyntaxKind.ConstKeyword) {
-                    initializer = parseVariableDeclarationList(/*disallowIn:*/ true);
+                    initializer = parseVariableDeclarationList(/*inForStatementInitializer:*/ true);
                 }
                 else {
                     initializer = disallowInAnd(parseExpression);
                 }
             }
-            var forOrForInStatement: IterationStatement;
+            var forOrForInOrForOfStatement: IterationStatement;
             if (parseOptional(SyntaxKind.InKeyword)) {
                 var forInStatement = <ForInStatement>createNode(SyntaxKind.ForInStatement, pos);
                 forInStatement.initializer = initializer;
                 forInStatement.expression = allowInAnd(parseExpression);
                 parseExpected(SyntaxKind.CloseParenToken);
-                forOrForInStatement = forInStatement;
+                forOrForInOrForOfStatement = forInStatement;
             }
-            else {
+            else if (parseOptional(SyntaxKind.OfKeyword)) {
+                var forOfStatement = <ForOfStatement>createNode(SyntaxKind.ForOfStatement, pos);
+                forOfStatement.initializer = initializer;
+                forOfStatement.expression = allowInAnd(parseAssignmentExpressionOrHigher);
+                parseExpected(SyntaxKind.CloseParenToken);
+                forOrForInOrForOfStatement = forOfStatement;
+            } else {
                 var forStatement = <ForStatement>createNode(SyntaxKind.ForStatement, pos);
                 forStatement.initializer = initializer;
                 parseExpected(SyntaxKind.SemicolonToken);
@@ -3753,12 +3885,12 @@ module ts {
                     forStatement.iterator = allowInAnd(parseExpression);
                 }
                 parseExpected(SyntaxKind.CloseParenToken);
-                forOrForInStatement = forStatement;
+                forOrForInOrForOfStatement = forStatement;
             }
 
-            forOrForInStatement.statement = parseStatement();
+            forOrForInOrForOfStatement.statement = parseStatement();
 
-            return finishNode(forOrForInStatement);
+            return finishNode(forOrForInOrForOfStatement);
         }
 
         function parseBreakOrContinueStatement(kind: SyntaxKind): BreakOrContinueStatement {
@@ -3865,9 +3997,10 @@ module ts {
         function parseCatchClause(): CatchClause {
             var result = <CatchClause>createNode(SyntaxKind.CatchClause);
             parseExpected(SyntaxKind.CatchKeyword);
-            parseExpected(SyntaxKind.OpenParenToken);
-            result.name = parseIdentifier();
-            result.type = parseTypeAnnotation();
+            if (parseExpected(SyntaxKind.OpenParenToken)) {
+                result.variableDeclaration = parseVariableDeclaration();
+            }
+
             parseExpected(SyntaxKind.CloseParenToken);
             result.block = parseBlock(/*ignoreMissingOpenBrace:*/ false, /*checkForStrictMode:*/ false);
             return finishNode(result);
@@ -4004,7 +4137,7 @@ module ts {
                 case SyntaxKind.WhileKeyword:
                     return parseWhileStatement();
                 case SyntaxKind.ForKeyword:
-                    return parseForOrForInStatement();
+                    return parseForOrForInOrForOfStatement();
                 case SyntaxKind.ContinueKeyword:
                     return parseBreakOrContinueStatement(SyntaxKind.ContinueStatement);
                 case SyntaxKind.BreakKeyword:
@@ -4146,11 +4279,13 @@ module ts {
             var node = <VariableDeclaration>createNode(SyntaxKind.VariableDeclaration);
             node.name = parseIdentifierOrPattern();
             node.type = parseTypeAnnotation();
-            node.initializer = parseInitializer(/*inParameter*/ false);
+            if (!isInOrOfKeyword(token)) {
+                node.initializer = parseInitializer(/*inParameter*/ false);
+            }
             return finishNode(node);
         }
 
-        function parseVariableDeclarationList(disallowIn: boolean): VariableDeclarationList {
+        function parseVariableDeclarationList(inForStatementInitializer: boolean): VariableDeclarationList {
             var node = <VariableDeclarationList>createNode(SyntaxKind.VariableDeclarationList);
 
             switch (token) {
@@ -4167,20 +4302,39 @@ module ts {
             }
 
             nextToken();
-            var savedDisallowIn = inDisallowInContext();
-            setDisallowInContext(disallowIn);
 
-            node.declarations = parseDelimitedList(ParsingContext.VariableDeclarations, parseVariableDeclaration);
+            // The user may have written the following:
+            //
+            //    for (var of X) { }
+            //
+            // In this case, we want to parse an empty declaration list, and then parse 'of'
+            // as a keyword. The reason this is not automatic is that 'of' is a valid identifier.
+            // So we need to look ahead to determine if 'of' should be treated as a keyword in
+            // this context.
+            // The checker will then give an error that there is an empty declaration list.
+            if (token === SyntaxKind.OfKeyword && lookAhead(canFollowContextualOfKeyword)) {
+                node.declarations = createMissingList<VariableDeclaration>();
+            }
+            else {
+                var savedDisallowIn = inDisallowInContext();
+                setDisallowInContext(inForStatementInitializer);
 
-            setDisallowInContext(savedDisallowIn);
+                node.declarations = parseDelimitedList(ParsingContext.VariableDeclarations, parseVariableDeclaration);
+
+                setDisallowInContext(savedDisallowIn);
+            }
 
             return finishNode(node);
+        }
+        
+        function canFollowContextualOfKeyword(): boolean {
+            return nextTokenIsIdentifier() && nextToken() === SyntaxKind.CloseParenToken;
         }
 
         function parseVariableStatement(fullStart: number, modifiers: ModifiersArray): VariableStatement {
             var node = <VariableStatement>createNode(SyntaxKind.VariableStatement, fullStart);
             setModifiers(node, modifiers);
-            node.declarationList = parseVariableDeclarationList(/*disallowIn:*/ false);
+            node.declarationList = parseVariableDeclarationList(/*inForStatementInitializer:*/ false);
             parseSemicolon();
             return finishNode(node);
         }
@@ -4190,7 +4344,7 @@ module ts {
             setModifiers(node, modifiers);
             parseExpected(SyntaxKind.FunctionKeyword);
             node.asteriskToken = parseOptionalToken(SyntaxKind.AsteriskToken);
-            node.name = parseIdentifier();
+            node.name = node.flags & NodeFlags.Default ? parseOptionalIdentifier() : parseIdentifier();
             fillSignature(SyntaxKind.ColonToken, /*yieldAndGeneratorParameterContext:*/ !!node.asteriskToken, /*requireCompleteParameterList:*/ false, node);
             node.body = parseFunctionBlockOrSemicolon(!!node.asteriskToken, Diagnostics.or_expected);
             return finishNode(node);
@@ -4366,7 +4520,7 @@ module ts {
             var node = <ClassDeclaration>createNode(SyntaxKind.ClassDeclaration, fullStart);
             setModifiers(node, modifiers);
             parseExpected(SyntaxKind.ClassKeyword);
-            node.name = parseIdentifier();
+            node.name = node.flags & NodeFlags.Default ? parseOptionalIdentifier() : parseIdentifier();
             node.typeParameters = parseTypeParameters();
             node.heritageClauses = parseHeritageClauses(/*isClassHeritageClause:*/ true);
 
@@ -4519,15 +4673,75 @@ module ts {
             return nextToken() === SyntaxKind.OpenParenToken;
         }
 
-        function parseImportDeclaration(fullStart: number, modifiers: ModifiersArray): ImportDeclaration {
-            var node = <ImportDeclaration>createNode(SyntaxKind.ImportDeclaration, fullStart);
-            setModifiers(node, modifiers);
+        function nextTokenIsCommaOrFromKeyword() {
+            nextToken();
+            return token === SyntaxKind.CommaToken ||
+                token === SyntaxKind.FromKeyword;
+        }
+
+        function parseImportDeclarationOrImportEqualsDeclaration(fullStart: number, modifiers: ModifiersArray): ImportEqualsDeclaration | ImportDeclaration {
             parseExpected(SyntaxKind.ImportKeyword);
-            node.name = parseIdentifier();
-            parseExpected(SyntaxKind.EqualsToken);
-            node.moduleReference = parseModuleReference();
+            var afterImportPos = scanner.getStartPos();
+
+            var identifier: Identifier;
+            if (isIdentifier()) {
+                identifier = parseIdentifier();
+                if (token !== SyntaxKind.CommaToken && token !== SyntaxKind.FromKeyword) {
+                    // ImportEquals declaration of type:
+                    // import x = require("mod"); or
+                    // import x = M.x;
+                    var importEqualsDeclaration = <ImportEqualsDeclaration>createNode(SyntaxKind.ImportEqualsDeclaration, fullStart);
+                    setModifiers(importEqualsDeclaration, modifiers);
+                    importEqualsDeclaration.name = identifier;
+                    parseExpected(SyntaxKind.EqualsToken);
+                    importEqualsDeclaration.moduleReference = parseModuleReference();
+                    parseSemicolon();
+                    return finishNode(importEqualsDeclaration);
+                }
+            }
+
+            // Import statement
+            var importDeclaration = <ImportDeclaration>createNode(SyntaxKind.ImportDeclaration, fullStart);
+            setModifiers(importDeclaration, modifiers);
+
+            // ImportDeclaration:
+            //  import ImportClause from ModuleSpecifier ;
+            //  import ModuleSpecifier;
+            if (identifier || // import id
+                token === SyntaxKind.AsteriskToken || // import * 
+                token === SyntaxKind.OpenBraceToken) { // import {
+                importDeclaration.importClause = parseImportClause(identifier, afterImportPos);
+                parseExpected(SyntaxKind.FromKeyword);
+            }
+
+            importDeclaration.moduleSpecifier = parseModuleSpecifier();
             parseSemicolon();
-            return finishNode(node);
+            return finishNode(importDeclaration);
+        }
+
+        function parseImportClause(identifier: Identifier, fullStart: number) {
+            //ImportClause:
+            //  ImportedDefaultBinding
+            //  NameSpaceImport
+            //  NamedImports
+            //  ImportedDefaultBinding, NameSpaceImport
+            //  ImportedDefaultBinding, NamedImports
+
+            var importClause = <ImportClause>createNode(SyntaxKind.ImportClause, fullStart);
+            if (identifier) {
+                // ImportedDefaultBinding:
+                //  ImportedBinding
+                importClause.name = identifier;
+            }
+
+            // If there was no default import or if there is comma token after default import 
+            // parse namespace or named imports
+            if (!importClause.name ||
+                parseOptional(SyntaxKind.CommaToken)) {
+                importClause.namedBindings = token === SyntaxKind.AsteriskToken ? parseNamespaceImport() : parseNamedImportsOrExports(SyntaxKind.NamedImports);
+            }
+
+            return finishNode(importClause);
         }
 
         function parseModuleReference() {
@@ -4540,26 +4754,116 @@ module ts {
             var node = <ExternalModuleReference>createNode(SyntaxKind.ExternalModuleReference);
             parseExpected(SyntaxKind.RequireKeyword);
             parseExpected(SyntaxKind.OpenParenToken);
-
-            // We allow arbitrary expressions here, even though the grammar only allows string 
-            // literals.  We check to ensure that it is only a string literal later in the grammar
-            // walker.
-            node.expression = parseExpression();
-
-            // Ensure the string being required is in our 'identifier' table.  This will ensure 
-            // that features like 'find refs' will look inside this file when search for its name.
-            if (node.expression.kind === SyntaxKind.StringLiteral) {
-                internIdentifier((<LiteralExpression>node.expression).text);
-            }
-
+            node.expression = parseModuleSpecifier();
             parseExpected(SyntaxKind.CloseParenToken);
             return finishNode(node);
         }
 
-        function parseExportAssignmentTail(fullStart: number, modifiers: ModifiersArray): ExportAssignment {
+        function parseModuleSpecifier(): Expression {
+            // We allow arbitrary expressions here, even though the grammar only allows string 
+            // literals.  We check to ensure that it is only a string literal later in the grammar
+            // walker.
+            var result = parseExpression();
+            // Ensure the string being required is in our 'identifier' table.  This will ensure 
+            // that features like 'find refs' will look inside this file when search for its name.
+            if (result.kind === SyntaxKind.StringLiteral) {
+                internIdentifier((<LiteralExpression>result).text);
+            }
+            return result;
+        }
+
+        function parseNamespaceImport(): NamespaceImport {
+            // NameSpaceImport:
+            //  * as ImportedBinding
+            var namespaceImport = <NamespaceImport>createNode(SyntaxKind.NamespaceImport);
+            parseExpected(SyntaxKind.AsteriskToken);
+            parseExpected(SyntaxKind.AsKeyword);
+            namespaceImport.name = parseIdentifier();
+            return finishNode(namespaceImport);
+        }
+
+        function parseNamedImportsOrExports(kind: SyntaxKind): NamedImportsOrExports {
+            var node = <NamedImports>createNode(kind);
+
+            // NamedImports:
+            //  { }
+            //  { ImportsList }
+            //  { ImportsList, }
+
+            // ImportsList:
+            //  ImportSpecifier
+            //  ImportsList, ImportSpecifier
+            node.elements = parseBracketedList(ParsingContext.ImportOrExportSpecifiers,
+                kind === SyntaxKind.NamedImports ? parseImportSpecifier : parseExportSpecifier,
+                SyntaxKind.OpenBraceToken, SyntaxKind.CloseBraceToken);
+            return finishNode(node);
+        }
+
+        function parseExportSpecifier() {
+            return parseImportOrExportSpecifier(SyntaxKind.ExportSpecifier);
+        }
+
+        function parseImportSpecifier() {
+            return parseImportOrExportSpecifier(SyntaxKind.ImportSpecifier);
+        }
+
+        function parseImportOrExportSpecifier(kind: SyntaxKind): ImportOrExportSpecifier {
+            var node = <ImportSpecifier>createNode(kind);
+            // ImportSpecifier:
+            //  ImportedBinding
+            //  IdentifierName as ImportedBinding
+            var isFirstIdentifierNameNotAnIdentifier = isKeyword(token) && !isIdentifier();
+            var start = scanner.getTokenPos();
+            var identifierName = parseIdentifierName();
+            if (token === SyntaxKind.AsKeyword) {
+                node.propertyName = identifierName;
+                parseExpected(SyntaxKind.AsKeyword);
+                if (isIdentifier()) {
+                    node.name = parseIdentifierName();
+                }
+                else {
+                    parseErrorAtCurrentToken(Diagnostics.Identifier_expected);
+                }
+            }
+            else {
+                node.name = identifierName;
+                if (isFirstIdentifierNameNotAnIdentifier) {
+                    // Report error identifier expected
+                    parseErrorAtPosition(start, identifierName.end - start, Diagnostics.Identifier_expected);
+                }
+            }
+
+            return finishNode(node);
+        }
+
+        function parseExportDeclaration(fullStart: number, modifiers: ModifiersArray): ExportDeclaration {
+            var node = <ExportDeclaration>createNode(SyntaxKind.ExportDeclaration, fullStart);
+            setModifiers(node, modifiers);
+            if (parseOptional(SyntaxKind.AsteriskToken)) {
+                parseExpected(SyntaxKind.FromKeyword);
+                node.moduleSpecifier = parseModuleSpecifier();
+            }
+            else {
+                node.exportClause = parseNamedImportsOrExports(SyntaxKind.NamedExports);
+                if (parseOptional(SyntaxKind.FromKeyword)) {
+                    node.moduleSpecifier = parseModuleSpecifier();
+                }
+            }
+            parseSemicolon();
+            return finishNode(node);
+        }
+
+        function parseExportAssignment(fullStart: number, modifiers: ModifiersArray): ExportAssignment {
             var node = <ExportAssignment>createNode(SyntaxKind.ExportAssignment, fullStart);
             setModifiers(node, modifiers);
-            node.exportName = parseIdentifier();
+            if (parseOptional(SyntaxKind.EqualsToken)) {
+                node.isExportEquals = true;
+            }
+            else {
+                parseExpected(SyntaxKind.DefaultKeyword);
+            }
+            //node.exportName = parseIdentifier();
+            node.expression = parseAssignmentExpressionOrHigher();
             parseSemicolon();
             return finishNode(node);
         }
@@ -4581,16 +4885,18 @@ module ts {
                 case SyntaxKind.ClassKeyword:
                 case SyntaxKind.InterfaceKeyword:
                 case SyntaxKind.EnumKeyword:
-                case SyntaxKind.ImportKeyword:
                 case SyntaxKind.TypeKeyword:
                     // Not true keywords so ensure an identifier follows
                     return lookAhead(nextTokenIsIdentifierOrKeyword);
+                case SyntaxKind.ImportKeyword:
+                    // Not true keywords so ensure an identifier follows or is string literal or asterisk or open brace
+                    return lookAhead(nextTokenCanFollowImportKeyword);
                 case SyntaxKind.ModuleKeyword:
                     // Not a true keyword so ensure an identifier or string literal follows
                     return lookAhead(nextTokenIsIdentifierOrKeywordOrStringLiteral);
                 case SyntaxKind.ExportKeyword:
                     // Check for export assignment or modifier on source element
-                    return lookAhead(nextTokenIsEqualsTokenOrDeclarationStart);
+                    return lookAhead(nextTokenCanFollowExportKeyword);
                 case SyntaxKind.DeclareKeyword:
                 case SyntaxKind.PublicKeyword:
                 case SyntaxKind.PrivateKeyword:
@@ -4615,9 +4921,16 @@ module ts {
             return isIdentifierOrKeyword() || token === SyntaxKind.StringLiteral;
         }
 
-        function nextTokenIsEqualsTokenOrDeclarationStart() {
+        function nextTokenCanFollowImportKeyword() {
             nextToken();
-            return token === SyntaxKind.EqualsToken || isDeclarationStart();
+            return isIdentifierOrKeyword() || token === SyntaxKind.StringLiteral ||
+                token === SyntaxKind.AsteriskToken || token === SyntaxKind.OpenBraceToken;
+        }
+
+        function nextTokenCanFollowExportKeyword() {
+            nextToken();
+            return token === SyntaxKind.EqualsToken || token === SyntaxKind.AsteriskToken ||
+                token === SyntaxKind.OpenBraceToken || token === SyntaxKind.DefaultKeyword || isDeclarationStart();
         }
 
         function nextTokenIsDeclarationStart() {
@@ -4625,13 +4938,20 @@ module ts {
             return isDeclarationStart();
         }
 
+        function nextTokenIsAsKeyword() {
+            return nextToken() === SyntaxKind.AsKeyword;
+        }
+
         function parseDeclaration(): ModuleElement {
             var fullStart = getNodePos();
             var modifiers = parseModifiers();
             if (token === SyntaxKind.ExportKeyword) {
                 nextToken();
-                if (parseOptional(SyntaxKind.EqualsToken)) {
-                    return parseExportAssignmentTail(fullStart, modifiers);
+                if (token === SyntaxKind.DefaultKeyword || token === SyntaxKind.EqualsToken) {
+                    return parseExportAssignment(fullStart, modifiers);
+                }
+                if (token === SyntaxKind.AsteriskToken || token === SyntaxKind.OpenBraceToken) {
+                    return parseExportDeclaration(fullStart, modifiers);
                 }
             }
 
@@ -4653,7 +4973,7 @@ module ts {
                 case SyntaxKind.ModuleKeyword:
                     return parseModuleDeclaration(fullStart, modifiers);
                 case SyntaxKind.ImportKeyword:
-                    return parseImportDeclaration(fullStart, modifiers);
+                    return parseImportDeclarationOrImportEqualsDeclaration(fullStart, modifiers);
                 default:
                     Debug.fail("Mismatch between isDeclarationStart and parseDeclaration");
             }
@@ -4678,9 +4998,9 @@ module ts {
         }
 
         function processReferenceComments(sourceFile: SourceFile): void {
-            var triviaScanner = createScanner(languageVersion, /*skipTrivia*/false, sourceText);
+            var triviaScanner = createScanner(sourceFile.languageVersion, /*skipTrivia*/false, sourceText);
             var referencedFiles: FileReference[] = [];
-            var amdDependencies: string[] = [];
+            var amdDependencies: {path: string; name: string}[] = [];
             var amdModuleName: string;
 
             // Keep scanning all the leading trivia in the file until we get to something that 
@@ -4707,7 +5027,7 @@ module ts {
                         referencedFiles.push(fileReference);
                     }
                     if (diagnosticMessage) {
-                        sourceFile.referenceDiagnostics.push(createFileDiagnostic(sourceFile, range.pos, range.end - range.pos, diagnosticMessage));
+                        sourceFile.parseDiagnostics.push(createFileDiagnostic(sourceFile, range.pos, range.end - range.pos, diagnosticMessage));
                     }
                 }
                 else {
@@ -4715,15 +5035,22 @@ module ts {
                     var amdModuleNameMatchResult = amdModuleNameRegEx.exec(comment);
                     if (amdModuleNameMatchResult) {
                         if (amdModuleName) {
-                            sourceFile.referenceDiagnostics.push(createFileDiagnostic(sourceFile, range.pos, range.end - range.pos, Diagnostics.An_AMD_module_cannot_have_multiple_name_assignments));
+                            sourceFile.parseDiagnostics.push(createFileDiagnostic(sourceFile, range.pos, range.end - range.pos, Diagnostics.An_AMD_module_cannot_have_multiple_name_assignments));
                         }
                         amdModuleName = amdModuleNameMatchResult[2];
                     }
 
-                    var amdDependencyRegEx = /^\/\/\/\s*<amd-dependency\s+path\s*=\s*('|")(.+?)\1/gim;
+                    var amdDependencyRegEx = /^\/\/\/\s*<amd-dependency\s/gim;
+                    var pathRegex = /\spath\s*=\s*('|")(.+?)\1/gim;
+                    var nameRegex = /\sname\s*=\s*('|")(.+?)\1/gim;
                     var amdDependencyMatchResult = amdDependencyRegEx.exec(comment);
                     if (amdDependencyMatchResult) {
-                        amdDependencies.push(amdDependencyMatchResult[2]);
+                        var pathMatchResult = pathRegex.exec(comment);
+                        var nameMatchResult = nameRegex.exec(comment);
+                        if (pathMatchResult) {
+                            var amdDependency = {path: pathMatchResult[2], name: nameMatchResult ? nameMatchResult[2] : undefined };
+                            amdDependencies.push(amdDependency);
+                        }
                     }
                 }
             }
@@ -4736,21 +5063,12 @@ module ts {
         function setExternalModuleIndicator(sourceFile: SourceFile) {
             sourceFile.externalModuleIndicator = forEach(sourceFile.statements, node =>
                 node.flags & NodeFlags.Export
-                || node.kind === SyntaxKind.ImportDeclaration && (<ImportDeclaration>node).moduleReference.kind === SyntaxKind.ExternalModuleReference
+                || node.kind === SyntaxKind.ImportEqualsDeclaration && (<ImportEqualsDeclaration>node).moduleReference.kind === SyntaxKind.ExternalModuleReference
+                || node.kind === SyntaxKind.ImportDeclaration
                 || node.kind === SyntaxKind.ExportAssignment
+                || node.kind === SyntaxKind.ExportDeclaration
                     ? node
                     : undefined);
-        }
-
-        function getSyntacticDiagnostics() {
-            if (syntacticDiagnostics === undefined) {
-                // Don't bother doing any grammar checks if there are already parser errors.  
-                // Otherwise we may end up with too many cascading errors.
-                syntacticDiagnostics = sourceFile.referenceDiagnostics.concat(sourceFile.parseDiagnostics);
-            }
-
-            Debug.assert(syntacticDiagnostics !== undefined);
-            return syntacticDiagnostics;
         }
     }
 
