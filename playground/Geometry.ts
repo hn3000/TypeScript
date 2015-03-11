@@ -2,6 +2,12 @@
 
 module g {
 
+    export interface IPoint {
+        x:number;
+        y:number;
+        moveby(dx:number, dy:number);
+    }
+
     /**
      Representation of a 2-dimensional point.
      */
