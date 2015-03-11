@@ -1,256 +1,9 @@
 
 ///<reference path="../compiler/types.ts" />
+///<reference path="./compilerTypes.ts" />
 ///<reference path="./generator.ts" />
 
 module tsgen {
-
-    // copy of the one from compiler/types.ts
-    export enum SyntaxKind {
-        Unknown,
-        EndOfFileToken,
-        SingleLineCommentTrivia,
-        MultiLineCommentTrivia,
-        NewLineTrivia,
-        WhitespaceTrivia,
-        // Literals
-        NumericLiteral,
-        StringLiteral,
-        RegularExpressionLiteral,
-        NoSubstitutionTemplateLiteral,
-        // Pseudo-literals
-        TemplateHead,
-        TemplateMiddle,
-        TemplateTail,
-        // Punctuation
-        OpenBraceToken,
-        CloseBraceToken,
-        OpenParenToken,
-        CloseParenToken,
-        OpenBracketToken,
-        CloseBracketToken,
-        DotToken,
-        DotDotDotToken,
-        SemicolonToken,
-        CommaToken,
-        LessThanToken,
-        GreaterThanToken,
-        LessThanEqualsToken,
-        GreaterThanEqualsToken,
-        EqualsEqualsToken,
-        ExclamationEqualsToken,
-        EqualsEqualsEqualsToken,
-        ExclamationEqualsEqualsToken,
-        EqualsGreaterThanToken,
-        PlusToken,
-        MinusToken,
-        AsteriskToken,
-        SlashToken,
-        PercentToken,
-        PlusPlusToken,
-        MinusMinusToken,
-        LessThanLessThanToken,
-        GreaterThanGreaterThanToken,
-        GreaterThanGreaterThanGreaterThanToken,
-        AmpersandToken,
-        BarToken,
-        CaretToken,
-        ExclamationToken,
-        TildeToken,
-        AmpersandAmpersandToken,
-        BarBarToken,
-        QuestionToken,
-        ColonToken,
-        // Assignments
-        EqualsToken,
-        PlusEqualsToken,
-        MinusEqualsToken,
-        AsteriskEqualsToken,
-        SlashEqualsToken,
-        PercentEqualsToken,
-        LessThanLessThanEqualsToken,
-        GreaterThanGreaterThanEqualsToken,
-        GreaterThanGreaterThanGreaterThanEqualsToken,
-        AmpersandEqualsToken,
-        BarEqualsToken,
-        CaretEqualsToken,
-        // Identifiers
-        Identifier,
-        // Reserved words
-        BreakKeyword,
-        CaseKeyword,
-        CatchKeyword,
-        ClassKeyword,
-        ConstKeyword,
-        ContinueKeyword,
-        DebuggerKeyword,
-        DefaultKeyword,
-        DeleteKeyword,
-        DoKeyword,
-        ElseKeyword,
-        EnumKeyword,
-        ExportKeyword,
-        ExtendsKeyword,
-        FalseKeyword,
-        FinallyKeyword,
-        ForKeyword,
-        FunctionKeyword,
-        IfKeyword,
-        ImportKeyword,
-        InKeyword,
-        InstanceOfKeyword,
-        NewKeyword,
-        NullKeyword,
-        ReturnKeyword,
-        SuperKeyword,
-        SwitchKeyword,
-        ThisKeyword,
-        ThrowKeyword,
-        TrueKeyword,
-        TryKeyword,
-        TypeOfKeyword,
-        VarKeyword,
-        VoidKeyword,
-        WhileKeyword,
-        WithKeyword,
-        // Strict mode reserved words
-        ImplementsKeyword,
-        InterfaceKeyword,
-        LetKeyword,
-        PackageKeyword,
-        PrivateKeyword,
-        ProtectedKeyword,
-        PublicKeyword,
-        StaticKeyword,
-        YieldKeyword,
-        // TypeScript keywords
-        AnyKeyword,
-        BooleanKeyword,
-        ConstructorKeyword,
-        DeclareKeyword,
-        GetKeyword,
-        ModuleKeyword,
-        RequireKeyword,
-        NumberKeyword,
-        SetKeyword,
-        StringKeyword,
-        TypeKeyword,
-        // Parse tree nodes
-        Missing,
-        // Names
-        QualifiedName,
-        // Signature elements
-        TypeParameter,
-        Parameter,
-        // TypeMember
-        Property,
-        Method,
-        Constructor,
-        GetAccessor,
-        SetAccessor,
-        CallSignature,
-        ConstructSignature,
-        IndexSignature,
-        // Type
-        TypeReference,
-        FunctionType,
-        ConstructorType,
-        TypeQuery,
-        TypeLiteral,
-        ArrayType,
-        TupleType,
-        UnionType,
-        ParenType,
-        // Expression
-        ArrayLiteral,
-        ObjectLiteral,
-        PropertyAssignment,
-        ShorthandPropertyAssignment,
-        PropertyAccess,
-        IndexedAccess,
-        CallExpression,
-        NewExpression,
-        TaggedTemplateExpression,
-        TypeAssertion,
-        ParenExpression,
-        FunctionExpression,
-        ArrowFunction,
-        PrefixOperator,
-        PostfixOperator,
-        BinaryExpression,
-        ConditionalExpression,
-        TemplateExpression,
-        TemplateSpan,
-        OmittedExpression,
-        // Element
-        Block,
-        VariableStatement,
-        EmptyStatement,
-        ExpressionStatement,
-        IfStatement,
-        DoStatement,
-        WhileStatement,
-        ForStatement,
-        ForInStatement,
-        ContinueStatement,
-        BreakStatement,
-        ReturnStatement,
-        WithStatement,
-        SwitchStatement,
-        CaseClause,
-        DefaultClause,
-        LabeledStatement,
-        ThrowStatement,
-        TryStatement,
-        TryBlock,
-        CatchBlock,
-        FinallyBlock,
-        DebuggerStatement,
-        VariableDeclaration,
-        FunctionDeclaration,
-        FunctionBlock,
-        ClassDeclaration,
-        InterfaceDeclaration,
-        TypeAliasDeclaration,
-        EnumDeclaration,
-        ModuleDeclaration,
-        ModuleBlock,
-        ImportDeclaration,
-        ExportAssignment,
-        // Enum
-        EnumMember,
-        // Top-level nodes
-        SourceFile,
-        Program,
-        // Synthesized list
-        SyntaxList,
-        // Enum value count
-        Count,
-        // Markers
-        FirstAssignment = EqualsToken,
-        LastAssignment = CaretEqualsToken,
-        FirstReservedWord = BreakKeyword,
-        LastReservedWord = WithKeyword,
-        FirstKeyword = BreakKeyword,
-        LastKeyword = TypeKeyword,
-        FirstFutureReservedWord = ImplementsKeyword,
-        LastFutureReservedWord = YieldKeyword,
-        FirstTypeNode = TypeReference,
-        LastTypeNode = ParenType,
-        FirstPunctuation = OpenBraceToken,
-        LastPunctuation = CaretEqualsToken,
-        FirstToken = EndOfFileToken,
-        LastToken = TypeKeyword,
-        FirstTriviaToken = SingleLineCommentTrivia,
-        LastTriviaToken = WhitespaceTrivia,
-        FirstLiteralToken = NumericLiteral,
-        LastLiteralToken = NoSubstitutionTemplateLiteral,
-        FirstTemplateToken = NoSubstitutionTemplateLiteral,
-        LastTemplateToken = TemplateTail,
-        FirstOperator = SemicolonToken,
-        LastOperator = CaretEqualsToken,
-        FirstBinaryOperator = LessThanToken,
-        LastBinaryOperator = CaretEqualsToken
-    }
 
 
     export interface INodeHandler {
@@ -491,8 +244,11 @@ module tsgen {
     interface IGenericWalker {
         [k:string]:tsgen.INodeHandler;
 	default:tsgen.INodeHandler;
-	operator:tsgen.INodeHandler;
 	binaryOperator:tsgen.INodeHandler;
+    }
+
+    export function walkProgram(filenames:string[], nodeHandler:(context: any, node: any, after: boolean) => boolean) {
+        ts.walkProgram(filenames, (c,n,a) => nodeHandler(c,n,a));
     }
 
     export function walkProgramNodes(filenames:string[], nodeWalker:tsgen.INodeWalker) {
@@ -504,9 +260,7 @@ module tsgen {
 	  var k = sk[i];
 	  if (null == walker[k]) {
 	    if (i >= sk.FirstBinaryOperator && i <= sk.LastBinaryOperator) {
-	      walker[k] = walker.binaryOperator || walker.operator || walker.default;
-	    } else if (i >= sk.FirstOperator && i <= sk.LastOperator) {
-	      walker[k] = walker.operator || walker.default;
+	      walker[k] = walker.binaryOperator || walker.default;
 	    } else {
               walker[k] = walker.default;
 	    }
@@ -529,7 +283,20 @@ module tsgen {
         var k = getNodeKind(n);
 	var m = (<IGenericVisitor><any>this)[k];
 	if (m) m.call(this,n);
-	
+
       }
     }
 }
+
+/** for node.js: */
+declare var module: {
+	exports: any;
+        require(id: string): any;
+	id: string;
+	filename: string;
+	loaded: boolean;
+	parent: any;
+	children: any[];
+};
+
+(module).exports = tsgen;

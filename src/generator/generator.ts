@@ -1,15 +1,16 @@
 
-/// <reference path="..\compiler\types.ts"/>
-/// <reference path="..\compiler\core.ts"/>
-/// <reference path="..\compiler\scanner.ts"/>
-/// <reference path="..\compiler\parser.ts"/>
-/// <reference path="..\compiler\checker.ts"/>
+/// <reference path="../compiler/types.ts"/>
+/// <reference path="../compiler/core.ts"/>
+/// <reference path="../compiler/scanner.ts"/>
+/// <reference path="../compiler/parser.ts"/>
+/// <reference path="../compiler/checker.ts"/>
+/// <reference path="../compiler/program.ts"/>
 
 /// <reference path="../compiler/sys.ts"/>
 
 module ts {
 
-    function createCompilerHost(options: CompilerOptions): CompilerHost {
+    function __createCompilerHost(options: CompilerOptions): CompilerHost {
         var currentDirectory: string;
         var existingDirectories: Map<boolean> = {};
 
@@ -23,7 +24,7 @@ module ts {
                 }
                 text = "";
             }
-            return text !== undefined ? createSourceFile(filename, text, languageVersion, /*version:*/ "0") : undefined;
+            return text !== undefined ? createSourceFile(filename, text, languageVersion) : undefined;
         }
 
         function writeFile(fileName: string, data: string, writeByteOrderMark:boolean, onError?: (message: string) => void) {
@@ -66,7 +67,7 @@ module ts {
 
         return {
             getSourceFile: getSourceFile,
-            getDefaultLibFilename: () => combinePaths(getDirectoryPath(normalizePath(sys.getExecutingFilePath())), "lib.d.ts"),
+	    getDefaultLibFileName: (compilerOptions:CompilerOptions) => combinePaths(getDirectoryPath(normalizePath(sys.getExecutingFilePath())), "lib.d.ts"),
             writeFile: writeFile,
             getCurrentDirectory: () => currentDirectory || (currentDirectory = sys.getCurrentDirectory()),
             useCaseSensitiveFileNames: () => sys.useCaseSensitiveFileNames,
@@ -84,13 +85,18 @@ module ts {
     }
 
     function reportDiagnostic(diagnostic: Diagnostic) {
+        var output = "";
+
         if (diagnostic.file) {
-            var loc = diagnostic.file.getLineAndCharacterFromPosition(diagnostic.start);
-            sys.write(diagnostic.file.filename + "(" + loc.line + "," + loc.character + "): " + diagnostic.messageText + sys.newLine);
-        }
-        else {
-            sys.write(diagnostic.messageText + sys.newLine);
-        }
+	    var loc = getLineAndCharacterOfPosition(diagnostic.file, diagnostic.start);
+
+            output += `${ diagnostic.file.fileName }(${ loc.line + 1 },${ loc.character + 1 }): `;
+	}
+
+        var category = DiagnosticCategory[diagnostic.category].toLowerCase();
+	output += `${ category } TS${ diagnostic.code }: ${ flattenDiagnosticMessageText(diagnostic.messageText, sys.newLine) }${ sys.newLine }`;
+
+        sys.write(output);
     }
 
     function reportDiagnostics(diagnostics: Diagnostic[]) {
@@ -107,11 +113,27 @@ module ts {
     export function walkProgram(filenames:string[], nodeWalker:(context:WalkerContext, node:Node, after:boolean) => boolean) {
         var options = getDefaultCompilerOptions(),
             host = createCompilerHost(options),
-            program = createProgram(filenames, options, host),
-            errors = program.getDiagnostics(),
-            checker = program.getTypeChecker(/*fullTypeCheckMode*/ true),
-            typeErrors = checker.getDiagnostics(),
-            emitErrors = checker.emitFiles().errors,
+            program = createProgram(filenames, options, host);
+
+        // First get any syntactic errors.
+        var diagnostics = program.getSyntacticDiagnostics();
+        reportDiagnostics(diagnostics);
+
+        // If we didn't have any syntactic errors, then also try getting the global and
+        // semantic errors.
+        if (diagnostics.length === 0) {
+            var diagnostics = program.getGlobalDiagnostics();
+            reportDiagnostics(diagnostics);
+
+            if (diagnostics.length === 0) {
+                var diagnostics = program.getSemanticDiagnostics();
+                reportDiagnostics(diagnostics);
+            }
+        }
+
+        var emitResult = program.emit(),
+            emitErrors = emitResult.diagnostics,
+            checker = program.getTypeChecker(),
             sourceFiles = program.getSourceFiles(),
             walker = function(context:WalkerContext, node:Node) {
                 var descend = nodeWalker(context, node, false);
@@ -122,17 +144,13 @@ module ts {
                 return false;
             };
 
-        if (!errors || !errors.length) {
-            errors = concatenate(typeErrors, emitErrors);
-        }
-
-        if (errors && errors.length) {
-            reportDiagnostics(errors);
+        if (emitErrors && emitErrors.length) {
+            reportDiagnostics(emitErrors);
         }
 
         for (var i = 0, n = sourceFiles.length; i < n; ++i) {
             var thisOne = sourceFiles[i];
-            if (-1 == thisOne.filename.indexOf('.d.ts')) {
+            if (-1 == thisOne.fileName.indexOf('.d.ts')) {
                 var context = {
                     sourcefile: thisOne,
                     checker: checker
@@ -144,6 +162,3 @@ module ts {
     }
 
 }
-
-
-(module).exports = ts;

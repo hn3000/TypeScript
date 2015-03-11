@@ -56,9 +56,10 @@ function filepath(filename, contextPath) {
     if (sfp[i] == '.') {
       sfp.splice(i,1);
       n-=1;
-    } else if(sfp[i] == '..') {
+/*    } else if(sfp[i] == '..') {
       sfp.splice(i-1,2);
       n-=2;
+*/
     } else {
       ++i;
     }
@@ -69,12 +70,12 @@ function filepath(filename, contextPath) {
 
 var importDumper = function(context, node, after) {
   if (node.kind == ts.SyntaxKind.SourceFile) {
-    console.log(node.filename);
-    var importDetails = getImportDetails(node.filename);
+    console.log(node.fileName);
+    var importDetails = getImportDetails(node.fileName);
 
     var files = node.referencedFiles;
     for (var i = 0, len = files.length; i < len; ++i) {
-      var fn = filepath(files[i].filename, node.filename);
+      var fn = filepath(files[i].fileName, node.fileName);
       console.log('- '+fn);
       var importedFile = getImportDetails(fn);
       importedFile.addImporter(importDetails);
@@ -90,8 +91,6 @@ var files = ['Geometry.ts'];
 if (process.argv.length > 2) {
   files = process.argv.slice(2);
 }
-
-//ts.walkProgram(files, structureDumper);
 
 ts.walkProgram(files, importDumper);
 

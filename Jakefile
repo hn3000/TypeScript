@@ -137,6 +137,7 @@ var generatorSources = [
     return path.join(compilerDirectory, f);
 }).concat([
     "generator.ts",
+    "compilerTypes.ts",
     "generatorAPI.ts"
 ].map(function (f) {
     return path.join(generatorDirectory, f);
