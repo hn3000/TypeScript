@@ -233,6 +233,7 @@ module tsgen {
         EnumDeclaration,
         ModuleDeclaration,
         ModuleBlock,
+        CaseBlock,
         ImportEqualsDeclaration,
         ImportDeclaration,
         ImportClause,
@@ -790,6 +791,10 @@ module tsgen {
 
     export interface SwitchStatement extends Statement {
         expression: Expression;
+        caseBlock: CaseBlock;
+    }
+
+    export interface CaseBlock extends Node {
         clauses: NodeArray<CaseOrDefaultClause>;
     }
 
@@ -1217,7 +1222,7 @@ module tsgen {
         Function                = 0x00000010,  // Function
         Class                   = 0x00000020,  // Class
         Interface               = 0x00000040,  // Interface
-        ConstEnum               = 0x00000080,  // enum
+        ConstEnum               = 0x00000080,  // Const enum
         RegularEnum             = 0x00000100,  // Enum
         ValueModule             = 0x00000200,  // Instantiated module
         NamespaceModule         = 0x00000400,  // Uninstantiated module
@@ -1265,7 +1270,7 @@ module tsgen {
         ClassExcludes = (Value | Type) & ~ValueModule,
         InterfaceExcludes = Type & ~Interface,
         RegularEnumExcludes = (Value | Type) & ~(RegularEnum | ValueModule), // regular enums merge only with regular enums and modules
-        ConstEnumExcludes = (Value | Type) & ~ConstEnum, // enums merge only with enums
+        ConstEnumExcludes = (Value | Type) & ~ConstEnum, // const enums merge only with const enums
         ValueModuleExcludes = Value & ~(Function | Class | RegularEnum | ValueModule),
         NamespaceModuleExcludes = 0,
         MethodExcludes = Value & ~Method,
@@ -1299,7 +1304,7 @@ module tsgen {
         exports?: SymbolTable;         // Module exports
         exportSymbol?: Symbol;         // Exported symbol associated with this symbol
         valueDeclaration?: Declaration // First value declaration of the symbol
-        constEnumOnlyModule?: boolean  // True if module contains only enums or other modules with only enums
+        constEnumOnlyModule?: boolean  // True if module contains only const enums or other modules with only const enums
     }
 
     export interface SymbolLinks {
