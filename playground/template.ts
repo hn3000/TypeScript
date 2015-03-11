@@ -57,6 +57,15 @@ module template {
   }
 }
 
-declare var module:any;
+// declare module so we can be used with require in node
+declare var module: {
+  exports: any;
+  require(id: string): any;
+  id: string;
+  filename: string;
+  loaded: boolean;
+  parent: any;
+  children: any[];
+};
 
 if (module) module.exports = template;
