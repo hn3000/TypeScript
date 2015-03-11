@@ -371,7 +371,11 @@ task("generate-diagnostics", [diagnosticInfoMapTs])
 
 // Local target to build the compiler and services
 var tscFile = path.join(builtLocalDirectory, compilerFilename);
-compileFile(tscFile, compilerSources, [builtLocalDirectory, copyright].concat(compilerSources), [copyright], /*useBuiltCompiler:*/ false);
+compileFile(tscFile, compilerSources, [builtLocalDirectory, copyright].concat(compilerSources),
+            /*prefixes*/ [copyright],
+            /*useBuiltCompiler*/ false,
+            /*noOutFile*/ false,
+            /*generateDeclarations*/ true);
 
 var servicesFile = path.join(builtLocalDirectory, "typescriptServices.js");
 var nodePackageFile = path.join(builtLocalDirectory, "typescript.js");
