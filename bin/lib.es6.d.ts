@@ -425,6 +425,9 @@ interface String {
       */
     substr(from: number, length?: number): string;
 
+    /** Returns the primitive value of the specified object. */
+    valueOf(): string;
+
     [index: number]: string;
 }
 
@@ -477,6 +480,9 @@ interface Number {
       * @param precision Number of significant digits. Must be in the range 1 - 21, inclusive.
       */
     toPrecision(precision?: number): string;
+
+    /** Returns the primitive value of the specified object. */
+    valueOf(): number;
 }
 
 interface NumberConstructor {
@@ -4977,7 +4983,6 @@ interface Date {
 /////////////////////////////
 /// IE DOM APIs
 /////////////////////////////
-
 
 interface PositionOptions {
     enableHighAccuracy?: boolean;
@@ -12328,7 +12333,7 @@ declare var Event: {
 
 interface ImageData {
     width: number;
-    data: number[];
+    data: Uint8ClampedArray;
     height: number;
 }
 declare var ImageData: {
