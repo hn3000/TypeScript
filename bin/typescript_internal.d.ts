@@ -270,7 +270,6 @@ declare module "typescript" {
     function nodeIsSynthesized(node: Node): boolean;
     function createSynthesizedNode(kind: SyntaxKind, startsOnNewLine?: boolean): Node;
     function generateUniqueName(baseName: string, isExistingName: (name: string) => boolean): string;
-    function createDiagnosticCollection(): DiagnosticCollection;
     /**
      * Based heavily on the abstract 'Quote'/'QuoteJSONString' operation from ECMA-262 (24.3.2.2),
      * but augmented for a few select characters (e.g. lineSeparator, paragraphSeparator, nextLine)
