@@ -67,7 +67,7 @@ module ts {
 
         return {
             getSourceFile: getSourceFile,
-	    getDefaultLibFileName: (compilerOptions:CompilerOptions) => combinePaths(getDirectoryPath(normalizePath(sys.getExecutingFilePath())), "lib.d.ts"),
+            getDefaultLibFileName: (compilerOptions:CompilerOptions) => combinePaths(getDirectoryPath(normalizePath(sys.getExecutingFilePath())), "lib.d.ts"),
             writeFile: writeFile,
             getCurrentDirectory: () => currentDirectory || (currentDirectory = sys.getCurrentDirectory()),
             useCaseSensitiveFileNames: () => sys.useCaseSensitiveFileNames,

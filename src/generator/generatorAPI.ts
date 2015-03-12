@@ -5,6 +5,7 @@
 
 module tsgen {
 
+    export var internal = ts;
 
     export interface INodeHandler {
       (n:ts.Node, after:boolean, context:any):boolean;
@@ -17,6 +18,9 @@ module tsgen {
         MultiLineCommentTrivia?: INodeHandler;
         NewLineTrivia?: INodeHandler;
         WhitespaceTrivia?: INodeHandler;
+        // We detect and provide better error recovery when we encounter a git merge marker.  This
+        // allows us to edit files with git-conflict markers in them in a much more pleasant manner.
+        ConflictMarkerTrivia?: INodeHandler;
         // Literals
         NumericLiteral?: INodeHandler;
         StringLiteral?: INodeHandler;
@@ -118,6 +122,7 @@ module tsgen {
         WhileKeyword?: INodeHandler;
         WithKeyword?: INodeHandler;
         // Strict mode reserved words
+        AsKeyword?: INodeHandler;
         ImplementsKeyword?: INodeHandler;
         InterfaceKeyword?: INodeHandler;
         LetKeyword?: INodeHandler;
@@ -127,7 +132,7 @@ module tsgen {
         PublicKeyword?: INodeHandler;
         StaticKeyword?: INodeHandler;
         YieldKeyword?: INodeHandler;
-        // TypeScript keywords
+        // Contextual keywords
         AnyKeyword?: INodeHandler;
         BooleanKeyword?: INodeHandler;
         ConstructorKeyword?: INodeHandler;
@@ -138,17 +143,24 @@ module tsgen {
         NumberKeyword?: INodeHandler;
         SetKeyword?: INodeHandler;
         StringKeyword?: INodeHandler;
+        SymbolKeyword?: INodeHandler;
         TypeKeyword?: INodeHandler;
+        FromKeyword?: INodeHandler;
+        OfKeyword?: INodeHandler; // LastKeyword and LastToken
+
         // Parse tree nodes
-        Missing?: INodeHandler;
+
         // Names
         QualifiedName?: INodeHandler;
+        ComputedPropertyName?: INodeHandler;
         // Signature elements
         TypeParameter?: INodeHandler;
         Parameter?: INodeHandler;
         // TypeMember
-        Property?: INodeHandler;
-        Method?: INodeHandler;
+        PropertySignature?: INodeHandler;
+        PropertyDeclaration?: INodeHandler;
+        MethodSignature?: INodeHandler;
+        MethodDeclaration?: INodeHandler;
         Constructor?: INodeHandler;
         GetAccessor?: INodeHandler;
         SetAccessor?: INodeHandler;
@@ -164,28 +176,36 @@ module tsgen {
         ArrayType?: INodeHandler;
         TupleType?: INodeHandler;
         UnionType?: INodeHandler;
-        ParenType?: INodeHandler;
+        ParenthesizedType?: INodeHandler;
+        // Binding patterns
+        ObjectBindingPattern?: INodeHandler;
+        ArrayBindingPattern?: INodeHandler;
+        BindingElement?: INodeHandler;
         // Expression
-        ArrayLiteral?: INodeHandler;
-        ObjectLiteral?: INodeHandler;
-        PropertyAssignment?: INodeHandler;
-        ShorthandPropertyAssignment?: INodeHandler;
-        PropertyAccess?: INodeHandler;
-        IndexedAccess?: INodeHandler;
+        ArrayLiteralExpression?: INodeHandler;
+        ObjectLiteralExpression?: INodeHandler;
+        PropertyAccessExpression?: INodeHandler;
+        ElementAccessExpression?: INodeHandler;
         CallExpression?: INodeHandler;
         NewExpression?: INodeHandler;
         TaggedTemplateExpression?: INodeHandler;
-        TypeAssertion?: INodeHandler;
-        ParenExpression?: INodeHandler;
+        TypeAssertionExpression?: INodeHandler;
+        ParenthesizedExpression?: INodeHandler;
         FunctionExpression?: INodeHandler;
         ArrowFunction?: INodeHandler;
-        PrefixOperator?: INodeHandler;
-        PostfixOperator?: INodeHandler;
+        DeleteExpression?: INodeHandler;
+        TypeOfExpression?: INodeHandler;
+        VoidExpression?: INodeHandler;
+        PrefixUnaryExpression?: INodeHandler;
+        PostfixUnaryExpression?: INodeHandler;
         BinaryExpression?: INodeHandler;
         ConditionalExpression?: INodeHandler;
         TemplateExpression?: INodeHandler;
-        TemplateSpan?: INodeHandler;
+        YieldExpression?: INodeHandler;
+        SpreadElementExpression?: INodeHandler;
         OmittedExpression?: INodeHandler;
+        // Misc
+        TemplateSpan?: INodeHandler;
         // Element
         Block?: INodeHandler;
         VariableStatement?: INodeHandler;
@@ -196,44 +216,61 @@ module tsgen {
         WhileStatement?: INodeHandler;
         ForStatement?: INodeHandler;
         ForInStatement?: INodeHandler;
+        ForOfStatement?: INodeHandler;
         ContinueStatement?: INodeHandler;
         BreakStatement?: INodeHandler;
         ReturnStatement?: INodeHandler;
         WithStatement?: INodeHandler;
         SwitchStatement?: INodeHandler;
-        CaseClause?: INodeHandler;
-        DefaultClause?: INodeHandler;
         LabeledStatement?: INodeHandler;
         ThrowStatement?: INodeHandler;
         TryStatement?: INodeHandler;
-        TryBlock?: INodeHandler;
-        CatchBlock?: INodeHandler;
-        FinallyBlock?: INodeHandler;
         DebuggerStatement?: INodeHandler;
         VariableDeclaration?: INodeHandler;
+        VariableDeclarationList?: INodeHandler;
         FunctionDeclaration?: INodeHandler;
-        FunctionBlock?: INodeHandler;
         ClassDeclaration?: INodeHandler;
         InterfaceDeclaration?: INodeHandler;
         TypeAliasDeclaration?: INodeHandler;
         EnumDeclaration?: INodeHandler;
         ModuleDeclaration?: INodeHandler;
         ModuleBlock?: INodeHandler;
+        CaseBlock?: INodeHandler;
+        ImportEqualsDeclaration?: INodeHandler;
         ImportDeclaration?: INodeHandler;
+        ImportClause?: INodeHandler;
+        NamespaceImport?: INodeHandler;
+        NamedImports?: INodeHandler;
+        ImportSpecifier?: INodeHandler;
         ExportAssignment?: INodeHandler;
+        ExportDeclaration?: INodeHandler;
+        NamedExports?: INodeHandler;
+        ExportSpecifier?: INodeHandler;
+
+        // Module references
+        ExternalModuleReference?: INodeHandler;
+
+        // Clauses
+        CaseClause?: INodeHandler;
+        DefaultClause?: INodeHandler;
+        HeritageClause?: INodeHandler;
+        CatchClause?: INodeHandler;
+
+        // Property assignments
+        PropertyAssignment?: INodeHandler;
+        ShorthandPropertyAssignment?: INodeHandler;
+
         // Enum
         EnumMember?: INodeHandler;
         // Top-level nodes
         SourceFile?: INodeHandler;
-        Program?: INodeHandler;
+
         // Synthesized list
         SyntaxList?: INodeHandler;
-        // Enum value count
-        Count?: INodeHandler;
 
         default?: INodeHandler;
-	operator?: INodeHandler;
-	binaryOperator?: INodeHandler;
+        operator?: INodeHandler;
+        binaryOperator?: INodeHandler;
     }
 
 
@@ -243,8 +280,12 @@ module tsgen {
 
     interface IGenericWalker {
         [k:string]:tsgen.INodeHandler;
-	default:tsgen.INodeHandler;
-	binaryOperator:tsgen.INodeHandler;
+        default:tsgen.INodeHandler;
+        binaryOperator:tsgen.INodeHandler;
+    }
+
+    export function getJsDocComments(node:any, sourcefile:any):CommentRange[] {
+        return ts.getJsDocComments(node, sourcefile);
     }
 
     export function walkProgram(filenames:string[], nodeHandler:(context: any, node: any, after: boolean) => boolean) {
@@ -253,50 +294,50 @@ module tsgen {
 
     export function walkProgramNodes(filenames:string[], nodeWalker:tsgen.INodeWalker) {
 
-    	var walker:IGenericWalker = <IGenericWalker>nodeWalker;
-	var sk = tsgen.SyntaxKind;
+        var walker:IGenericWalker = <IGenericWalker>nodeWalker;
+        var sk = tsgen.SyntaxKind;
 
-	for (var i = 0; i < sk.Count; ++i) {
-	  var k = sk[i];
-	  if (null == walker[k]) {
-	    if (i >= sk.FirstBinaryOperator && i <= sk.LastBinaryOperator) {
-	      walker[k] = walker.binaryOperator || walker.default;
-	    } else {
-              walker[k] = walker.default;
-	    }
-	  }
-	}
+        for (var i = 0; i < sk.Count; ++i) {
+            var k = sk[i];
+            if (null == walker[k]) {
+                if (i >= sk.FirstBinaryOperator && i <= sk.LastBinaryOperator) {
+                    walker[k] = walker.binaryOperator || walker.default;
+                } else {
+                    walker[k] = walker.default;
+                }
+            }
+        }
         ts.walkProgram(filenames, (context, node, after)=>walker[sk[node.kind]](node, after, context));
     }
 
 
     interface IGenericVisitor {
-      [k:string]: (n:ts.Node)=>void;
+        [k:string]: (n:ts.Node)=>void;
     }
 
     class NodeVisitor {
-      walk(n:ts.Node):boolean {
-        this.visit(n);
-	return false;
-      }
-      visit(n:ts.Node) {
-        var k = getNodeKind(n);
-	var m = (<IGenericVisitor><any>this)[k];
-	if (m) m.call(this,n);
+        walk(n:ts.Node):boolean {
+            this.visit(n);
+            return false;
+        }
+        visit(n:ts.Node) {
+            var k = getNodeKind(n);
+            var m = (<IGenericVisitor><any>this)[k];
+            if (m) m.call(this,n);
 
-      }
+        }
     }
 }
 
 /** for node.js: */
 declare var module: {
-	exports: any;
-        require(id: string): any;
-	id: string;
-	filename: string;
-	loaded: boolean;
-	parent: any;
-	children: any[];
+    exports: any;
+    require(id: string): any;
+    id: string;
+    filename: string;
+    loaded: boolean;
+    parent: any;
+    children: any[];
 };
 
 (module).exports = tsgen;
